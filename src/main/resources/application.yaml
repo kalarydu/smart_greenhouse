@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: greenhouse
+
+  # ========== 数据库配置 ==========
+  datasource:
+    url: jdbc:mysql://localhost:3306/greenhouse?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: '050516'
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ========== 华为云 IoT MQTT 配置 ==========
+  mqtt:
+    host: 768a256764.st1.iotda-app.cn-east-3.myhuaweicloud.com
+    port: 8883
+    access_key: EzatLvr2
+    access_code: t48kVdsqj4520b8IRRsou9fZrGThqgzF
+    instance_id:
+    subscribe_topic: msg/up
+    subscribe_topic_down: /message/down
+    qos: 0
+    # ========== 应用端下发指令，控制设备 ==========
+    region_id: cn-east-3
+    ak: HPUATCP20NEOS3FNIWFJ
+    sk: M6EqtyGlG3h5UCKVvSINLXd1z5UIcwegqSlVaMU3
+    project_id: 20c06f3f95b44aa5a4aacc47c43f5a39
+    device_id: 6a194b2de094d61592420898_kalary0516
+    command_topic: $oc/devices/6a194b2de094d61592420898_kalary0516/sys/messages/down
+
+# ========== MyBatis Plus 配置 ==========
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ========== 服务器端口 ==========
+server:
+  port: 8080

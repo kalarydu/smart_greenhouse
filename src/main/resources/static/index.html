@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧大棚管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; background: #f0f2f5; display: flex; min-height: 100vh; }
+
+        /* 左侧导航 */
+        .sidebar { width: 200px; background: #001529; color: #fff; padding-top: 20px; flex-shrink: 0; }
+        .sidebar .logo { text-align: center; font-size: 18px; font-weight: bold; padding: 0 16px 20px; border-bottom: 1px solid #002b5c; margin-bottom: 8px; }
+        .sidebar .logo span { font-size: 24px; }
+        .sidebar .tab { display: block; width: 100%; padding: 14px 24px; text-align: left; border: none; background: none; color: #ffffffa6; cursor: pointer; font-size: 15px; transition: .2s; }
+        .sidebar .tab:hover, .sidebar .tab.active { color: #fff; background: #1890ff; }
+
+        /* 右侧主区域 */
+        .main { flex: 1; padding: 24px; overflow-y: auto; }
+        .page-title { font-size: 22px; font-weight: bold; margin-bottom: 20px; color: #333; }
+
+        /* 卡片 */
+        .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        .card h3 { font-size: 16px; margin-bottom: 16px; color: #333; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; }
+
+        /* 表单 */
+        .form-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+        .form-row label { display: flex; flex-direction: column; font-size: 13px; color: #666; gap: 4px; min-width: 140px; }
+        .form-row input, .form-row select { padding: 7px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; }
+        .form-row input:focus, .form-row select:focus { outline: none; border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24,144,255,.2); }
+
+        /* 按钮 */
+        .btn { padding: 7px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: .2s; }
+        .btn-primary { background: #1890ff; color: #fff; }
+        .btn-primary:hover { background: #40a9ff; }
+        .btn-danger { background: #ff4d4f; color: #fff; }
+        .btn-danger:hover { background: #ff7875; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-success:hover { background: #73d13d; }
+        .btn-warning { background: #faad14; color: #fff; }
+        .btn-warning:hover { background: #ffc53d; }
+        .btn-sm { padding: 3px 10px; font-size: 12px; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #fafafa; color: #666; font-weight: 600; white-space: nowrap; }
+        tr:hover { background: #f5f5f5; }
+        .empty-row td { text-align: center; padding: 40px; color: #999; }
+
+        /* 分页 */
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 16px; }
+        .pagination button { padding: 5px 12px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .pagination button:hover { border-color: #1890ff; color: #1890ff; }
+        .pagination button:disabled { color: #d9d9d9; cursor: not-allowed; }
+        .pagination span { font-size: 13px; color: #666; }
+
+        /* 消息提示 */
+        .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 4px; color: #fff; font-size: 14px; z-index: 9999; animation: fadeIn .3s; }
+        .toast-success { background: #52c41a; }
+        .toast-error { background: #ff4d4f; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 状态标签 */
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+        .tag-on { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .tag-off { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+        .tag-pending { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
+        .tag-done { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+
+        /* 搜索区 */
+        .search-bar { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+        .search-bar label { display: flex; flex-direction: column; font-size: 12px; color: #888; gap: 3px; }
+        .search-bar input, .search-bar select { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
+
+        .hidden { display: none; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: #fff; border-radius: 8px; padding: 24px; min-width: 420px; max-width: 600px; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+        .modal h3 { margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+
+<!-- 左侧导航 -->
+<nav class="sidebar">
+    <div class="logo"><span>🌱</span><br>智慧大棚</div>
+    <button class="tab active" data-page="greenhouse">🏠 大棚管理</button>
+    <button class="tab" data-page="sensor">🌡️ 传感器数据</button>
+    <button class="tab" data-page="device">⚙️ 设备管理</button>
+    <button class="tab" data-page="alert">🔔 报警记录</button>
+</nav>
+
+<!-- 右侧主区域 -->
+<div class="main" id="mainContent"></div>
+
+<script>
+// ==================== 基础工具 ====================
+const API = {
+    get: (url) => fetch(url).then(r => r.json()),
+    post: (url, data) => fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
+    put: (url, data) => fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
+    del: (url) => fetch(url, { method:'DELETE' }).then(r => r.json()),
+};
+
+function toast(msg, type='success') {
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+}
+
+function formatTime(t) { return t ? t.replace('T',' ').substring(0,19) : '-'; }
+
+// ==================== 页面切换 ====================
+document.querySelectorAll('.sidebar .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadPage(btn.dataset.page);
+    });
+});
+
+function loadPage(page) {
+    const main = document.getElementById('mainContent');
+    switch(page) {
+        case 'greenhouse': renderGreenhouse(main); break;
+        case 'sensor': renderSensor(main); break;
+        case 'device': renderDevice(main); break;
+        case 'alert': renderAlert(main); break;
+    }
+}
+
+// ==================== 1. 大棚管理 ====================
+function renderGreenhouse(main) {
+    main.innerHTML = `
+        <div class="page-title">🏠 大棚管理</div>
+        <div class="card">
+            <h3 id="ghFormTitle">新增大棚</h3>
+            <div class="form-row">
+                <label>名称 <input id="ghName" placeholder="如：一号大棚"></label>
+                <label>位置 <input id="ghLocation" placeholder="如：A区-东侧"></label>
+                <label>面积(㎡) <input id="ghArea" type="number" step="0.1" value="200"></label>
+                <label>描述 <input id="ghDesc" placeholder="如：番茄种植大棚"></label>
+                <label>状态
+                    <select id="ghStatus"><option value="1">运行中</option><option value="0">停用</option></select>
+                </label>
+            </div>
+            <input type="hidden" id="ghId">
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="saveGreenhouse()">💾 保存</button>
+                <button class="btn" onclick="resetGhForm()" style="background:#f5f5f5">↩ 重置</button>
+            </div>
+        </div>
+        <div class="card">
+            <h3>大棚列表</h3>
+            <div class="search-bar">
+                <label>搜索名称 <input id="ghSearch" placeholder="输入大棚名称"></label>
+                <button class="btn btn-primary" onclick="loadGreenhouseList(1)">🔍 查询</button>
+            </div>
+            <table>
+                <thead><tr><th>ID</th><th>名称</th><th>位置</th><th>面积(㎡)</th><th>描述</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                <tbody id="ghTableBody"></tbody>
+            </table>
+            <div class="pagination" id="ghPagination"></div>
+        </div>`;
+    loadGreenhouseList(1);
+}
+
+function loadGreenhouseList(page) {
+    const name = document.getElementById('ghSearch').value;
+    let url = `/api/greenhouse/list?page=${page}&size=10`;
+    if (name) url += `&name=${encodeURIComponent(name)}`;
+
+    API.get(url).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const d = res.data;
+        const tbody = document.getElementById('ghTableBody');
+        if (!d.records || d.records.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = d.records.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td><b>${r.name}</b></td>
+                    <td>${r.location}</td>
+                    <td>${r.area}</td>
+                    <td>${r.description || '-'}</td>
+                    <td><span class="tag ${r.status===1?'tag-on':'tag-off'}">${r.status===1?'运行中':'停用'}</span></td>
+                    <td>${formatTime(r.createTime)}</td>
+                    <td class="btn-group">
+                        <button class="btn btn-primary btn-sm" onclick="editGreenhouse(${r.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteGreenhouse(${r.id})">删除</button>
+                    </td>
+                </tr>`).join('');
+        }
+        renderPagination('ghPagination', d.current, d.pages, loadGreenhouseList);
+    });
+}
+
+function editGreenhouse(id) {
+    API.get(`/api/greenhouse/${id}`).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const r = res.data;
+        document.getElementById('ghId').value = r.id;
+        document.getElementById('ghName').value = r.name;
+        document.getElementById('ghLocation').value = r.location;
+        document.getElementById('ghArea').value = r.area;
+        document.getElementById('ghDesc').value = r.description || '';
+        document.getElementById('ghStatus').value = r.status;
+        document.getElementById('ghFormTitle').textContent = '编辑大棚';
+        document.querySelector('#mainContent').scrollIntoView({ behavior:'smooth' });
+    });
+}
+
+function resetGhForm() {
+    document.getElementById('ghId').value = '';
+    document.getElementById('ghName').value = '';
+    document.getElementById('ghLocation').value = '';
+    document.getElementById('ghArea').value = '200';
+    document.getElementById('ghDesc').value = '';
+    document.getElementById('ghStatus').value = '1';
+    document.getElementById('ghFormTitle').textContent = '新增大棚';
+}
+
+function saveGreenhouse() {
+    const data = {
+        name: document.getElementById('ghName').value.trim(),
+        location: document.getElementById('ghLocation').value.trim(),
+        area: parseFloat(document.getElementById('ghArea').value) || 0,
+        description: document.getElementById('ghDesc').value.trim(),
+        status: parseInt(document.getElementById('ghStatus').value),
+    };
+    if (!data.name) { toast('请输入大棚名称', 'error'); return; }
+
+    const id = document.getElementById('ghId').value;
+    const promise = id ? API.put('/api/greenhouse', { ...data, id: parseInt(id) }) : API.post('/api/greenhouse', data);
+    promise.then(res => {
+        if (res.code === 200) { toast(res.data || '操作成功'); resetGhForm(); loadGreenhouseList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function deleteGreenhouse(id) {
+    if (!confirm('确定删除该大棚吗？（逻辑删除，可恢复）')) return;
+    API.del(`/api/greenhouse/${id}`).then(res => {
+        if (res.code === 200) { toast('删除成功'); loadGreenhouseList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+// ==================== 2. 传感器数据 ====================
+const METRICS = [
+    { key: 'temperature',    label: '温度',       unit: '℃' },
+    { key: 'humidity',       label: '空气湿度',   unit: '%' },
+    { key: 'lightIntensity', label: '光照强度',   unit: 'Lux' },
+    { key: 'co2Concentration',label: 'CO2浓度',   unit: 'ppm' },
+    { key: 'soilMoisture',   label: '土壤湿度',   unit: '%' },
+    { key: 'soilPh',         label: '土壤pH',     unit: '' },
+];
+const CHART_COLORS = ['#1890ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'];
+let snCurrentMetric = 'temperature';
+let snGreenhouseIds = [];
+let snChart = null;
+
+function renderSensor(main) {
+    main.innerHTML = `
+        <div class="page-title">🌡️ 传感器数据</div>
+
+        <!-- 指标选择 -->
+        <div class="card">
+            <h3>📊 对比指标</h3>
+            <div class="btn-group" id="snMetricBtns"></div>
+        </div>
+
+        <!-- 大棚选择 -->
+        <div class="card">
+            <h3>🏠 大棚选择</h3>
+            <div class="btn-group" id="snGhCheckboxes">
+                <span style="color:#999;font-size:13px">加载中...</span>
+            </div>
+        </div>
+
+        <!-- 时间范围 -->
+        <div class="card">
+            <h3>📅 时间范围</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+                <div class="btn-group" id="snTimeBtns"></div>
+                <label style="font-size:13px;color:#666">自定义:
+                    <input type="datetime-local" id="snStartTime">
+                </label>
+                <label style="font-size:13px;color:#666">至
+                    <input type="datetime-local" id="snEndTime">
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="snApplyCustomTime()">查询</button>
+            </div>
+        </div>
+
+        <!-- 折线图 -->
+        <div class="card">
+            <h3>📈 趋势图</h3>
+            <div style="position:relative;height:380px">
+                <canvas id="snChartCanvas"></canvas>
+            </div>
+            <div id="snChartEmpty" class="hidden" style="text-align:center;padding:60px;color:#999">暂无数据</div>
+        </div>
+
+        <!-- 数据列表 -->
+        <div class="card">
+            <h3>📋 数据列表</h3>
+            <div class="search-bar">
+                <label>大棚ID <input id="snSearchGid" type="number" placeholder="筛选大棚"></label>
+                <button class="btn btn-primary" onclick="loadSensorList(1)">🔍 查询</button>
+            </div>
+            <table>
+                <thead><tr><th>ID</th><th>大棚ID</th><th>温度℃</th><th>湿度%</th><th>光照Lux</th><th>CO2ppm</th><th>土壤湿度%</th><th>土壤pH</th><th>记录时间</th><th>操作</th></tr></thead>
+                <tbody id="snTableBody"></tbody>
+            </table>
+            <div class="pagination" id="snPagination"></div>
+        </div>`;
+
+    // 初始化指标按钮
+    initMetricButtons();
+    // 加载大棚列表
+    loadGreenhouseCheckboxes();
+    // 初始化时间范围按钮
+    initTimeButtons();
+    // 初始加载图表（近7天）
+    snApplyPreset('7d');
+    // 加载下方列表
+    loadSensorList(1);
+}
+
+// ========== 指标按钮 ==========
+function initMetricButtons() {
+    const container = document.getElementById('snMetricBtns');
+    container.innerHTML = METRICS.map((m, i) => {
+        const active = m.key === snCurrentMetric;
+        return `<button class="btn btn-sm" style="${active ? 'background:#1890ff;color:#fff' : 'background:#f5f5f5'}"
+                onclick="snSelectMetric('${m.key}')">${m.label}</button>`;
+    }).join('');
+}
+
+function snSelectMetric(key) {
+    snCurrentMetric = key;
+    initMetricButtons();
+    refreshChart();
+}
+
+// ========== 大棚选择 ==========
+function loadGreenhouseCheckboxes() {
+    API.get('/api/greenhouse/list?page=1&size=100').then(res => {
+        const container = document.getElementById('snGhCheckboxes');
+        if (res.code !== 200 || !res.data.records || res.data.records.length === 0) {
+            container.innerHTML = '<span style="color:#999;font-size:13px">无大棚数据</span>';
+            return;
+        }
+        // 首次默认全选
+        if (snGreenhouseIds.length === 0) {
+            snGreenhouseIds = res.data.records.map(r => r.id);
+        }
+        container.innerHTML = res.data.records.map(r => {
+            const checked = snGreenhouseIds.includes(r.id) ? 'checked' : '';
+            return `<label style="font-size:14px;cursor:pointer;margin-right:16px;user-select:none">
+                <input type="checkbox" value="${r.id}" ${checked} onchange="snToggleGreenhouse()"> ${r.name}
+            </label>`;
+        }).join('');
+    });
+}
+
+function snToggleGreenhouse() {
+    const boxes = document.querySelectorAll('#snGhCheckboxes input[type=checkbox]');
+    snGreenhouseIds = Array.from(boxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+    refreshChart();
+}
+
+// ========== 时间范围 ==========
+function initTimeButtons() {
+    document.getElementById('snTimeBtns').innerHTML = `
+        <button class="btn btn-sm" onclick="snApplyPreset('1d')">今天</button>
+        <button class="btn btn-sm" onclick="snApplyPreset('3d')">近3天</button>
+        <button class="btn btn-sm" style="background:#1890ff;color:#fff" id="snBtn7d" onclick="snApplyPreset('7d')">近7天</button>
+    `;
+}
+
+function snApplyPreset(days) {
+    // 高亮对应按钮
+    document.querySelectorAll('#snTimeBtns button').forEach(b => b.style.background = '#f5f5f5');
+    document.querySelectorAll('#snTimeBtns button').forEach(b => b.style.color = '#000');
+    const target = document.querySelector(`#snTimeBtns button:nth-child(${days === '1d' ? 1 : days === '3d' ? 2 : 3})`);
+    if (target) { target.style.background = '#1890ff'; target.style.color = '#fff'; }
+
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    let start;
+    if (days === '1d') {
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    } else if (days === '3d') {
+        start = new Date(now);
+        start.setDate(start.getDate() - 2);
+        start.setHours(0, 0, 0, 0);
+    } else {
+        start = new Date(now);
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+    }
+
+    document.getElementById('snStartTime').value = toLocalDatetimeStr(start);
+    document.getElementById('snEndTime').value = toLocalDatetimeStr(end);
+    refreshChart();
+}
+
+function snApplyCustomTime() {
+    // 取消预设高亮
+    document.querySelectorAll('#snTimeBtns button').forEach(b => { b.style.background = '#f5f5f5'; b.style.color = '#000'; });
+    refreshChart();
+}
+
+function toLocalDatetimeStr(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${d}T${h}:${min}`;
+}
+
+// ========== 图表刷新 ==========
+function refreshChart() {
+    if (snGreenhouseIds.length === 0) {
+        destroyChart();
+        document.getElementById('snChartEmpty').classList.remove('hidden');
+        return;
+    }
+
+    const start = document.getElementById('snStartTime').value;
+    const end = document.getElementById('snEndTime').value;
+
+    let url = `/api/sensor-data/chart?metric=${snCurrentMetric}&greenhouseIds=${snGreenhouseIds.join(',')}`;
+    if (start) url += `&startTime=${start}:00`;
+    if (end) url += `&endTime=${end}:00`;
+
+    API.get(url).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const d = res.data;
+        if (!d.series || d.series.length === 0 || d.series.every(s => s.dataPoints.length === 0)) {
+            destroyChart();
+            document.getElementById('snChartEmpty').classList.remove('hidden');
+            return;
+        }
+        document.getElementById('snChartEmpty').classList.add('hidden');
+        drawChart(d);
+    });
+}
+
+function drawChart(data) {
+    destroyChart();
+
+    const metricInfo = METRICS.find(m => m.key === data.metric) || { label: data.metric, unit: '' };
+    const datasets = data.series.map((s, i) => ({
+        label: s.greenhouseName,
+        data: s.dataPoints.map(p => ({ x: p.recordTime, y: p.value })),
+        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '20',
+        tension: 0.3,
+        pointRadius: s.dataPoints.length < 50 ? 3 : 0,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+    }));
+
+    const ctx = document.getElementById('snChartCanvas').getContext('2d');
+    snChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} ${metricInfo.unit}`,
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: { hour: 'MM-dd HH:mm', day: 'MM-dd' },
+                        tooltipFormat: 'yyyy-MM-dd HH:mm',
+                    },
+                    title: { display: true, text: '时间' },
+                },
+                y: {
+                    title: { display: true, text: `${metricInfo.label} (${metricInfo.unit})` },
+                    beginAtZero: false,
+                }
+            }
+        }
+    });
+}
+
+function destroyChart() {
+    if (snChart) { snChart.destroy(); snChart = null; }
+}
+
+// ========== 传感器列表（保留原有功能） ==========
+function loadSensorList(page) {
+    const gid = document.getElementById('snSearchGid').value;
+    let url = `/api/sensor-data/list?page=${page}&size=10`;
+    if (gid) url += `&greenhouseId=${gid}`;
+
+    API.get(url).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const d = res.data;
+        const tbody = document.getElementById('snTableBody');
+        if (!d.records || d.records.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="10">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = d.records.map(r => `
+                <tr>
+                    <td>${r.id}</td><td>${r.greenhouseId}</td>
+                    <td>${r.temperature != null ? r.temperature + '℃' : '-'}</td>
+                    <td>${r.humidity != null ? r.humidity + '%' : '-'}</td>
+                    <td>${r.lightIntensity != null ? r.lightIntensity : '-'}</td>
+                    <td>${r.co2Concentration != null ? r.co2Concentration : '-'}</td>
+                    <td>${r.soilMoisture != null ? r.soilMoisture + '%' : '-'}</td>
+                    <td>${r.soilPh != null ? r.soilPh : '-'}</td>
+                    <td>${formatTime(r.recordTime)}</td>
+                    <td><button class="btn btn-danger btn-sm" onclick="deleteSensor(${r.id})">删除</button></td>
+                </tr>`).join('');
+        }
+        renderPagination('snPagination', d.current, d.pages, loadSensorList);
+    });
+}
+
+function deleteSensor(id) {
+    if (!confirm('确定删除该条数据吗？')) return;
+    API.del(`/api/sensor-data/${id}`).then(res => {
+        if (res.code === 200) { toast('删除成功'); loadSensorList(1); refreshChart(); }
+        else toast(res.message, 'error');
+    });
+}
+
+// ==================== 3. 设备管理 ====================
+function renderDevice(main) {
+    main.innerHTML = `
+        <div class="page-title">⚙️ 设备管理</div>
+        <div class="card">
+            <h3 id="devFormTitle">新增设备</h3>
+            <div class="form-row">
+                <label>大棚ID <input id="devGid" type="number" value="1"></label>
+                <label>设备名称 <input id="devName" placeholder="如：风机-1号"></label>
+                <label>设备类型
+                    <select id="devType">
+                        <option value="FAN">风机</option>
+                        <option value="PUMP">水泵</option>
+                        <option value="LIGHT">补光灯</option>
+                        <option value="CURTAIN">卷帘</option>
+                    </select>
+                </label>
+                <label>状态
+                    <select id="devStatus"><option value="0">关闭</option><option value="1">开启</option></select>
+                </label>
+            </div>
+            <input type="hidden" id="devId">
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="saveDevice()">💾 保存</button>
+                <button class="btn" onclick="resetDevForm()" style="background:#f5f5f5">↩ 重置</button>
+            </div>
+        </div>
+        <div class="card">
+            <h3>设备列表</h3>
+            <div class="search-bar">
+                <label>大棚ID <input id="devSearchGid" type="number" placeholder="筛选"></label>
+                <label>类型
+                    <select id="devSearchType">
+                        <option value="">全部</option>
+                        <option value="FAN">风机</option>
+                        <option value="PUMP">水泵</option>
+                        <option value="LIGHT">补光灯</option>
+                        <option value="CURTAIN">卷帘</option>
+                    </select>
+                </label>
+                <button class="btn btn-primary" onclick="loadDeviceList(1)">🔍 查询</button>
+            </div>
+            <table>
+                <thead><tr><th>ID</th><th>大棚ID</th><th>名称</th><th>类型</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                <tbody id="devTableBody"></tbody>
+            </table>
+            <div class="pagination" id="devPagination"></div>
+        </div>`;
+    loadDeviceList(1);
+}
+
+function loadDeviceList(page) {
+    const gid = document.getElementById('devSearchGid').value;
+    const type = document.getElementById('devSearchType').value;
+    let url = `/api/device/list?page=${page}&size=10`;
+    if (gid) url += `&greenhouseId=${gid}`;
+    if (type) url += `&deviceType=${type}`;
+
+    API.get(url).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const d = res.data;
+        const typeMap = { FAN:'风机', PUMP:'水泵', LIGHT:'补光灯', CURTAIN:'卷帘' };
+        const tbody = document.getElementById('devTableBody');
+        if (!d.records || d.records.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = d.records.map(r => `
+                <tr>
+                    <td>${r.id}</td><td>${r.greenhouseId}</td><td><b>${r.deviceName}</b></td>
+                    <td>${typeMap[r.deviceType] || r.deviceType}</td>
+                    <td><span class="tag ${r.status===1?'tag-on':'tag-off'}">${r.status===1?'开启':'关闭'}</span></td>
+                    <td>${formatTime(r.createTime)}</td>
+                    <td class="btn-group">
+                        <button class="btn btn-warning btn-sm" onclick="toggleDevice(${r.id})">${r.status===1?'关闭':'开启'}</button>
+                        <button class="btn btn-primary btn-sm" onclick="editDevice(${r.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteDevice(${r.id})">删除</button>
+                    </td>
+                </tr>`).join('');
+        }
+        renderPagination('devPagination', d.current, d.pages, loadDeviceList);
+    });
+}
+
+function editDevice(id) {
+    API.get(`/api/device/${id}`).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const r = res.data;
+        document.getElementById('devId').value = r.id;
+        document.getElementById('devGid').value = r.greenhouseId;
+        document.getElementById('devName').value = r.deviceName;
+        document.getElementById('devType').value = r.deviceType;
+        document.getElementById('devStatus').value = r.status;
+        document.getElementById('devFormTitle').textContent = '编辑设备';
+        document.querySelector('#mainContent').scrollIntoView({ behavior:'smooth' });
+    });
+}
+
+function resetDevForm() {
+    document.getElementById('devId').value = '';
+    document.getElementById('devGid').value = '1';
+    document.getElementById('devName').value = '';
+    document.getElementById('devType').value = 'FAN';
+    document.getElementById('devStatus').value = '0';
+    document.getElementById('devFormTitle').textContent = '新增设备';
+}
+
+function saveDevice() {
+    const data = {
+        greenhouseId: parseInt(document.getElementById('devGid').value) || 1,
+        deviceName: document.getElementById('devName').value.trim(),
+        deviceType: document.getElementById('devType').value,
+        status: parseInt(document.getElementById('devStatus').value),
+    };
+    if (!data.deviceName) { toast('请输入设备名称', 'error'); return; }
+
+    const id = document.getElementById('devId').value;
+    const promise = id ? API.put('/api/device', { ...data, id: parseInt(id) }) : API.post('/api/device', data);
+    promise.then(res => {
+        if (res.code === 200) { toast(res.data || '操作成功'); resetDevForm(); loadDeviceList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function toggleDevice(id) {
+    API.put(`/api/device/${id}/toggle`).then(res => {
+        if (res.code === 200) { toast(res.data); loadDeviceList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function deleteDevice(id) {
+    if (!confirm('确定删除该设备吗？')) return;
+    API.del(`/api/device/${id}`).then(res => {
+        if (res.code === 200) { toast('删除成功'); loadDeviceList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+// ==================== 4. 报警记录 ====================
+function renderAlert(main) {
+    main.innerHTML = `
+        <div class="page-title">🔔 报警记录</div>
+        <div class="card">
+            <h3>新增报警</h3>
+            <div class="form-row">
+                <label>大棚ID <input id="alGid" type="number" value="1"></label>
+                <label>报警类型
+                    <select id="alType">
+                        <option value="TEMP_HIGH">温度过高</option>
+                        <option value="TEMP_LOW">温度过低</option>
+                        <option value="HUMIDITY_HIGH">湿度过高</option>
+                        <option value="HUMIDITY_LOW">湿度过低</option>
+                        <option value="CO2_HIGH">CO2过高</option>
+                        <option value="LIGHT_LOW">光照不足</option>
+                    </select>
+                </label>
+                <label>报警内容 <input id="alMsg" placeholder="报警描述"></label>
+            </div>
+            <button class="btn btn-primary" onclick="saveAlert()">💾 新增报警</button>
+        </div>
+        <div class="card">
+            <h3>报警列表</h3>
+            <div class="search-bar">
+                <label>大棚ID <input id="alSearchGid" type="number" placeholder="筛选"></label>
+                <label>状态
+                    <select id="alSearchStatus">
+                        <option value="">全部</option>
+                        <option value="0">未处理</option>
+                        <option value="1">已处理</option>
+                    </select>
+                </label>
+                <button class="btn btn-primary" onclick="loadAlertList(1)">🔍 查询</button>
+            </div>
+            <table>
+                <thead><tr><th>ID</th><th>大棚ID</th><th>类型</th><th>内容</th><th>状态</th><th>报警时间</th><th>处理时间</th><th>操作</th></tr></thead>
+                <tbody id="alTableBody"></tbody>
+            </table>
+            <div class="pagination" id="alPagination"></div>
+        </div>`;
+    loadAlertList(1);
+}
+
+const alertTypeMap = { TEMP_HIGH:'温度过高', TEMP_LOW:'温度过低', HUMIDITY_HIGH:'湿度过高', HUMIDITY_LOW:'湿度过低', CO2_HIGH:'CO2过高', LIGHT_LOW:'光照不足' };
+
+function loadAlertList(page) {
+    const gid = document.getElementById('alSearchGid').value;
+    const status = document.getElementById('alSearchStatus').value;
+    let url = `/api/alert-log/list?page=${page}&size=10`;
+    if (gid) url += `&greenhouseId=${gid}`;
+    if (status !== '') url += `&status=${status}`;
+
+    API.get(url).then(res => {
+        if (res.code !== 200) { toast(res.message, 'error'); return; }
+        const d = res.data;
+        const tbody = document.getElementById('alTableBody');
+        if (!d.records || d.records.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无报警记录 👍</td></tr>';
+        } else {
+            tbody.innerHTML = d.records.map(r => `
+                <tr>
+                    <td>${r.id}</td><td>${r.greenhouseId}</td>
+                    <td>${alertTypeMap[r.alertType] || r.alertType}</td>
+                    <td>${r.message}</td>
+                    <td><span class="tag ${r.status===0?'tag-pending':'tag-done'}">${r.status===0?'未处理':'已处理'}</span></td>
+                    <td>${formatTime(r.createTime)}</td>
+                    <td>${formatTime(r.handleTime)}</td>
+                    <td class="btn-group">
+                        ${r.status===0 ? `<button class="btn btn-success btn-sm" onclick="handleAlert(${r.id})">✅ 处理</button>` : ''}
+                        <button class="btn btn-danger btn-sm" onclick="deleteAlert(${r.id})">删除</button>
+                    </td>
+                </tr>`).join('');
+        }
+        renderPagination('alPagination', d.current, d.pages, loadAlertList);
+    });
+}
+
+function saveAlert() {
+    const data = {
+        greenhouseId: parseInt(document.getElementById('alGid').value) || 1,
+        alertType: document.getElementById('alType').value,
+        message: document.getElementById('alMsg').value.trim(),
+        status: 0
+    };
+    if (!data.message) { toast('请输入报警内容', 'error'); return; }
+    API.post('/api/alert-log', data).then(res => {
+        if (res.code === 200) { toast('报警已记录'); loadAlertList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function handleAlert(id) {
+    API.put(`/api/alert-log/${id}/handle`).then(res => {
+        if (res.code === 200) { toast('报警已处理'); loadAlertList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function deleteAlert(id) {
+    if (!confirm('确定删除该报警记录吗？')) return;
+    API.del(`/api/alert-log/${id}`).then(res => {
+        if (res.code === 200) { toast('删除成功'); loadAlertList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+// ==================== 分页组件 ====================
+function renderPagination(containerId, current, pages, loadFn) {
+    const c = document.getElementById(containerId);
+    if (!pages || pages <= 1) {
+        c.innerHTML = `<span>共 1 页</span>`;
+        return;
+    }
+    let html = '';
+    html += `<button ${current<=1?'disabled':''} onclick="${loadFn.name}(${current-1})">上一页</button>`;
+    for (let i = 1; i <= pages; i++) {
+        html += `<button style="${i===current?'background:#1890ff;color:#fff;border-color:#1890ff':''}" onclick="${loadFn.name}(${i})">${i}</button>`;
+    }
+    html += `<button ${current>=pages?'disabled':''} onclick="${loadFn.name}(${current+1})">下一页</button>`;
+    html += `<span>共 ${pages} 页</span>`;
+    c.innerHTML = html;
+}
+
+// ==================== 启动：默认加载大棚管理 ====================
+loadPage('greenhouse');
+</script>
+</body>
+</html>
