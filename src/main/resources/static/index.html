@@ -80,6 +80,28 @@
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal { background: #fff; border-radius: 8px; padding: 24px; min-width: 420px; max-width: 600px; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
         .modal h3 { margin-bottom: 16px; }
+
+        /* AI 聊天 */
+        .chat-container { display: flex; flex-direction: column; height: calc(100vh - 130px); }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; background: #fafafa; border-radius: 8px; margin-bottom: 12px; max-height: 60vh; }
+        .chat-msg { margin-bottom: 16px; display: flex; gap: 10px; }
+        .chat-msg.user { flex-direction: row-reverse; }
+        .chat-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .chat-avatar.ai { background: #e6f7ff; }
+        .chat-avatar.user { background: #1890ff; color: #fff; }
+        .chat-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+        .chat-bubble.ai { background: #fff; border: 1px solid #e8e8e8; border-radius: 4px 12px 12px 12px; }
+        .chat-bubble.user { background: #1890ff; color: #fff; border-radius: 12px 4px 12px 12px; }
+        .chat-input-area { display: flex; gap: 10px; }
+        .chat-input-area textarea { flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; resize: none; font-family: inherit; }
+        .chat-input-area textarea:focus { outline: none; border-color: #1890ff; }
+        .chat-input-area button { padding: 10px 24px; border: none; border-radius: 8px; background: #1890ff; color: #fff; cursor: pointer; font-size: 15px; white-space: nowrap; }
+        .chat-input-area button:hover { background: #40a9ff; }
+        .chat-input-area button:disabled { background: #d9d9d9; cursor: not-allowed; }
+        .typing-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #bbb; animation: typing 1.4s infinite; margin: 0 2px; }
+        .typing-dot:nth-child(2) { animation-delay: .2s; }
+        .typing-dot:nth-child(3) { animation-delay: .4s; }
+        @keyframes typing { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
     </style>
 </head>
 <body>
@@ -91,6 +113,7 @@
     <button class="tab" data-page="sensor">🌡️ 传感器数据</button>
     <button class="tab" data-page="device">⚙️ 设备管理</button>
     <button class="tab" data-page="alert">🔔 报警记录</button>
+    <button class="tab" data-page="ai">🤖 AI助手</button>
 </nav>
 
 <!-- 右侧主区域 -->
@@ -131,6 +154,7 @@ function loadPage(page) {
         case 'sensor': renderSensor(main); break;
         case 'device': renderDevice(main); break;
         case 'alert': renderAlert(main); break;
+        case 'ai': renderAi(main); break;
     }
 }
 
@@ -683,6 +707,116 @@ function deleteDevice(id) {
         if (res.code === 200) { toast('删除成功'); loadDeviceList(1); }
         else toast(res.message, 'error');
     });
+}
+
+// ==================== 5. AI 助手 ====================
+const QUICK_QUESTIONS = [
+    '最近各大棚有什么异常吗？',
+    '分析一下温度趋势',
+    '土壤状况如何？需要浇水吗？',
+    '给我一些种植建议',
+];
+
+function renderAi(main) {
+    main.innerHTML = `
+        <div class="page-title">🤖 AI 智慧农业助手</div>
+        <div class="card chat-container">
+            <div class="chat-messages" id="aiMessages">
+                <div class="chat-msg">
+                    <div class="chat-avatar ai">🌱</div>
+                    <div class="chat-bubble ai">你好！我是智慧农业AI助手，我可以帮你分析大棚传感器数据、发现异常、给出种植建议。<br><br>你可以直接提问，也可以点击下方的快捷问题 👇</div>
+                </div>
+            </div>
+            <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px" id="aiQuickBtns"></div>
+            <div class="chat-input-area">
+                <textarea id="aiInput" rows="2" placeholder="请输入你的问题，例如：一号大棚最近有什么异常？" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMessage()}"></textarea>
+                <button id="aiSendBtn" onclick="sendAiMessage()">📨 发送</button>
+            </div>
+        </div>`;
+
+    // 渲染快捷问题
+    document.getElementById('aiQuickBtns').innerHTML = QUICK_QUESTIONS.map(q =>
+        `<button class="btn btn-sm" style="background:#f0f5ff;color:#1890ff;border:1px solid #d6e4ff"
+            onclick="sendQuickQuestion('${q}')">${q}</button>`
+    ).join('');
+}
+
+function sendQuickQuestion(q) {
+    document.getElementById('aiInput').value = q;
+    sendAiMessage();
+}
+
+async function sendAiMessage() {
+    const input = document.getElementById('aiInput');
+    const sendBtn = document.getElementById('aiSendBtn');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // 显示用户消息
+    appendMessage('user', message);
+    input.value = '';
+    input.focus();
+
+    // 显示加载动画
+    const loadingId = appendLoading();
+
+    // 禁用发送按钮
+    sendBtn.disabled = true;
+    sendBtn.textContent = '⏳ 思考中...';
+
+    try {
+        const res = await API.post('/api/ai/chat', { message: message });
+        removeLoading(loadingId);
+        if (res.code === 200) {
+            appendMessage('ai', res.data.reply);
+        } else {
+            appendMessage('ai', '抱歉，出错了：' + (res.message || '未知错误'));
+        }
+    } catch (e) {
+        removeLoading(loadingId);
+        appendMessage('ai', '抱歉，网络请求失败，请检查网络连接。');
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = '📨 发送';
+}
+
+function appendMessage(role, text) {
+    const container = document.getElementById('aiMessages');
+    const div = document.createElement('div');
+    div.className = `chat-msg ${role}`;
+    div.innerHTML = `
+        <div class="chat-avatar ${role}">${role === 'ai' ? '🌱' : '👤'}</div>
+        <div class="chat-bubble ${role}">${escapeHtml(text)}</div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function appendLoading() {
+    const container = document.getElementById('aiMessages');
+    const id = 'loading-' + Date.now();
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = 'chat-msg';
+    div.innerHTML = `
+        <div class="chat-avatar ai">🌱</div>
+        <div class="chat-bubble ai">
+            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+        </div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return id;
+}
+
+function removeLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML.replace(/\n/g, '<br>');
 }
 
 // ==================== 4. 报警记录 ====================
