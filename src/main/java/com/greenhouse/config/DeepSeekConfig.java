@@ -11,4 +11,5 @@ public class DeepSeekConfig {
     private String apiKey;
     private String baseUrl;
     private String model;
+    private String systemPrompt;
 }

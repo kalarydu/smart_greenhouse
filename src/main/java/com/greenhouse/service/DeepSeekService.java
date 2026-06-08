@@ -51,16 +51,11 @@ public class DeepSeekService {
         // 2. 构建传感器上下文文本
         String sensorContext = buildContext(recentData);
 
-        // 3. 构建系统提示词
-        String systemPrompt = """
-                你是一个专业的智慧农业专家助手，负责分析温室大棚传感器数据。你的职责：
-                1. 根据提供的传感器数据，分析大棚环境状况
-                2. 发现温度、湿度、光照、CO2、土壤湿度、pH值等方面的异常
-                3. 给出专业的种植建议和处理措施
-                4. 回答用户关于农业种植的任何问题
-
-                要求：回答简洁专业，用中文，数据引用要具体到数值。
-                """;
+        // 3. 构建系统提示词（从配置文件读取，可随时修改）
+        String systemPrompt = config.getSystemPrompt();
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            systemPrompt = "你是一个专业的智慧农业专家助手，负责分析温室大棚传感器数据。";
+        }
 
         // 4. 调用 DeepSeek API
         return callApi(systemPrompt, userMessage, sensorContext);
