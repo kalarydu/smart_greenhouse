@@ -297,22 +297,25 @@ public class MqttMessageListener implements MqttCallbackExtended {
             if (data.getRecordTime() == null && service.containsKey("event_time")) {
                 String eventTime = service.getString("event_time");
                 if (eventTime != null && !eventTime.isEmpty()) {
-                    // 去掉末尾的Z，统一解析
-                    String normalized = eventTime.replace("Z", "").replace("z", "");
-                    // IoTDA 两种格式:
-                    //   ISO:   "2026-06-08T10:30:00Z" → 19 chars
-                    //   紧凑:  "20260608T103000Z"      → 15 chars
+                    // IoTDA 上报的时间是 UTC（带Z后缀），需要转换为北京时间（UTC+8）
                     try {
-                        if (normalized.contains("-")) {
-                            // ISO 格式: yyyy-MM-ddTHH:mm:ss
-                            data.setRecordTime(java.time.LocalDateTime.parse(normalized));
+                        if (eventTime.contains("-")) {
+                            // ISO 格式: "2026-06-08T10:30:00Z"
+                            java.time.ZonedDateTime zdt = java.time.ZonedDateTime.parse(eventTime);
+                            // 转为北京时间
+                            data.setRecordTime(zdt.withZoneSameInstant(
+                                    java.time.ZoneId.of("Asia/Shanghai")).toLocalDateTime());
                         } else {
-                            // 紧凑格式: yyyyMMddTHHmmss
-                            data.setRecordTime(java.time.LocalDateTime.parse(normalized,
-                                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")));
+                            // 紧凑格式: "20260608T103000Z"
+                            String normalized = eventTime.toUpperCase();
+                            java.time.LocalDateTime utc = java.time.LocalDateTime.parse(
+                                    normalized.replace("Z", ""),
+                                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"));
+                            // UTC → 北京时间（+8小时）
+                            data.setRecordTime(utc.plusHours(8));
                         }
                     } catch (Exception e) {
-                        log.warn("解析 event_time 失败: {}", eventTime);
+                        log.warn("解析 event_time 失败: {}", eventTime, e);
                     }
                 }
             }
