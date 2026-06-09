@@ -23,15 +23,16 @@
 ```
 demo/
 ├── src/main/java/com/greenhouse/
-│   ├── config/          # 配置类（MyBatis Plus、MQTT 配置）
-│   ├── controller/      # REST 接口
-│   ├── entity/          # 数据库实体
-│   ├── mapper/          # MyBatis Mapper
-│   ├── mqtt/            # MQTT 消息监听与下发
-│   ├── service/         # 业务逻辑接口
-│   └── service/impl/    # 业务逻辑实现
+│   ├── common/           # 通用类（统一响应 Result）
+│   ├── config/           # 配置类（MyBatis Plus、MQTT、报警阈值、自动控制）
+│   ├── controller/       # REST 接口
+│   ├── entity/           # 数据库实体
+│   ├── mapper/           # MyBatis Mapper
+│   ├── mqtt/             # MQTT 消息监听与下发
+│   ├── service/          # 业务逻辑（报警检测、自动控制）
+│   └── service/impl/     # 业务逻辑实现
 ├── src/main/resources/
-│   ├── application.yaml # ⚠️ 核心配置文件（需要改！）
+│   ├── application.yaml  # ⚠️ 核心配置文件（需要改！）
 │   ├── init.sql          # 数据库初始化脚本
 │   └── static/index.html # 前端页面
 └── pom.xml
@@ -140,21 +141,33 @@ cd demo
 └─────────────┘                      └──────┬───────┘
                                            │ MQTT 订阅
                                            ▼
-                                  ┌────────────────┐
-                                  │  Spring Boot   │
-                                  │  应用 (本系统)  │
-                                  └───────┬────────┘
-                                          │ JDBC(3306)
-                                          ▼
-                                  ┌────────────────┐
-                                  │    MySQL 数据库  │
-                                  └───────┬────────┘
-                                          │ REST API(8080)
-                                          ▼
-                                  ┌────────────────┐
-                                  │   浏览器前端     │
-                                  │  (Chart.js 图表) │
-                                  └────────────────┘
+                                  ┌────────────────────┐
+                                  │  Spring Boot 应用   │
+                                  │                    │
+                                  │  MqttMessageListener│
+                                  │    ↓ 解析消息       │
+                                  │  SensorDataService  │
+                                  │    ↓ 入库           │
+                                  │  AlertCheckService  │ ← 报警检测
+                                  │  AutoControlService │ ← 🆕 自动控制
+                                  │    ↓ 下发指令       │
+                                  │  MqttSendUtil       │
+                                  └────────┬───────────┘
+                                           │ JDBC(3306)
+                                           ▼
+                                  ┌────────────────────┐
+                                  │    MySQL 数据库     │
+                                  │  gh_sensor_data     │
+                                  │  gh_alert_log       │
+                                  │  gh_device          │
+                                  │  gh_greenhouse      │
+                                  └────────┬───────────┘
+                                           │ REST API(8080)
+                                           ▼
+                                  ┌────────────────────┐
+                                  │   浏览器前端        │
+                                  │  (Chart.js 图表)    │
+                                  └────────────────────┘
 ```
 
 ### 数据流转
@@ -162,7 +175,9 @@ cd demo
 1. **传感器上报** → IoT 设备通过 MQTT 上报属性到华为云 IoTDA
 2. **应用接收** → `MqttMessageListener` 订阅 IoTDA 主题，解析传感器数据
 3. **入库存储** → 解析后的数据写入 `gh_sensor_data` 表
-4. **指令下发** → 前端操作 → `MqttSendUtil` 通过华为云 API 向设备下发控制指令
+4. **报警检测** → `AlertCheckService` 逐项检测阈值，超标自动生成报警记录
+5. **🆕 自动控制** → `AutoControlService` 检测温度/光照，自动开关风机/补光灯
+6. **指令下发** → 手动或自动触发 → `MqttSendUtil` 通过华为云 API 向设备下发控制指令
 
 ### 两种 MQTT 消息处理
 
@@ -261,6 +276,59 @@ greenhouse:
       soil-ph-low: 5.5
       soil-ph-high: 7.5
 ```
+
+---
+
+## 🎮 自动设备控制机制（🆕）
+
+当 MQTT 收到传感器数据入库并完成报警检测后，系统会自动检查是否需要控制设备。与手动 toggle 完全相同的 MQTT 指令格式下发到华为云 IoTDA。
+
+### 控制逻辑
+
+| 触发条件 | 动作 | 目标设备 | 冷却期 |
+|----------|------|----------|--------|
+| 温度 > `temperature-high` | 自动开启 | 同大棚 **风机 (FAN)** | 5 分钟 |
+| 光照 < `light-low` | 自动开启 | 同大棚 **补光灯 (LIGHT)** | 5 分钟 |
+
+### 保护机制
+
+| 机制 | 说明 |
+|------|------|
+| **状态检查** | 设备已处于目标状态（已开启/已关闭）则跳过，不重复下发 |
+| **冷却期** | 同一设备在冷却窗口内（默认 5 分钟）不重复操作，避免阈值边界抖动 |
+| **空值保护** | `greenhouseId` 缺失时跳过，不会报错中断 |
+| **MQTT 格式一致** | 自动下发的指令格式与手动 toggle 完全一致（`电机控制` / `紫光灯控制`） |
+
+### 数据流（MQTT → 自动控制）
+
+```
+MQTT 传感器数据到达
+  → parseSensorData / parsePropertyReport  解析消息
+  → sensorDataService.save()               入库
+  → alertCheckService.checkAndCreateAlerts()  报警检测
+  → autoControlService.checkAndControl()      🆕 自动控制
+       ├─ 温度 > 30℃ → 查同大棚 FAN → 关闭中 → 开启，MQTT 下发 {"motor":"ON"}
+       └─ 光照 < 10000 Lux → 查同大棚 LIGHT → 关闭中 → 开启，MQTT 下发 {"light":"ON"}
+```
+
+### 配置示例
+
+```yaml
+greenhouse:
+  auto-control:
+    enabled: true              # 是否启用自动控制（关闭后只报警不控制）
+    cooldown-minutes: 5        # 冷却时间（分钟），避免频繁开关
+    thresholds:
+      temperature-high: 30.0   # ℃，高于此值 → 自动开启风机
+      light-low: 10000.0       # Lux，低于此值 → 自动开启补光灯
+```
+
+### 核心类
+
+| 类 | 职责 |
+|------|------|
+| `config/AutoControlConfig.java` | 读取 YAML 配置（`greenhouse.auto-control`） |
+| `service/AutoControlService.java` | 检测阈值、查询设备、更新状态、下发 MQTT |
 
 ---
 

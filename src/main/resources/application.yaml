@@ -43,7 +43,7 @@ mybatis-plus:
 server:
   port: 8080
 
-# ========== 报警阈值配置 ==========
+# ========== 报警阈值 & 自动控制配置 ==========
 greenhouse:
   alert:
     enabled: true
@@ -60,6 +60,13 @@ greenhouse:
       soil-moisture-high: 80.0    # %，高于此值 → SOIL_MOISTURE_HIGH
       soil-ph-low: 5.5            # 低于此值 → SOIL_PH_LOW
       soil-ph-high: 7.5           # 高于此值 → SOIL_PH_HIGH
+
+  auto-control:
+    enabled: true
+    cooldown-minutes: 5  # 同一设备操作冷却时间（分钟），避免频繁开关
+    thresholds:
+      temperature-high: 30.0   # ℃，高于此值 → 自动开启风机
+      light-low: 10000.0       # Lux，低于此值 → 自动开启补光灯
 
 # ========== DeepSeek AI 配置 ==========
 deepseek:

@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.greenhouse.config.MqttConfig;
 import com.greenhouse.entity.SensorData;
 import com.greenhouse.service.AlertCheckService;
+import com.greenhouse.service.AutoControlService;
 import com.greenhouse.service.SensorDataService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -22,13 +23,16 @@ public class MqttMessageListener implements MqttCallbackExtended {
     private final MqttConfig config;
     private final SensorDataService sensorDataService;
     private final AlertCheckService alertCheckService;
+    private final AutoControlService autoControlService;
     private MqttAsyncClient mqttClient;
 
     public MqttMessageListener(MqttConfig config, SensorDataService sensorDataService,
-                               AlertCheckService alertCheckService) {
+                               AlertCheckService alertCheckService,
+                               AutoControlService autoControlService) {
         this.config = config;
         this.sensorDataService = sensorDataService;
         this.alertCheckService = alertCheckService;
+        this.autoControlService = autoControlService;
     }
 
     @PostConstruct
@@ -157,6 +161,8 @@ public class MqttMessageListener implements MqttCallbackExtended {
                         data.getSoilPh());
                 // 自动检测报警
                 alertCheckService.checkAndCreateAlerts(data);
+                // 自动设备控制（温度高→开风机，光照低→开补光灯）
+                autoControlService.checkAndControl(data);
             }
         } catch (Exception e) {
             log.error("消息处理失败", e);
