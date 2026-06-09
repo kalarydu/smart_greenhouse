@@ -82,11 +82,8 @@ INSERT INTO gh_greenhouse (name, location, area, description) VALUES
 
 -- 插入测试设备
 INSERT INTO gh_device (greenhouse_id, device_name, device_type, status) VALUES
-(1, '风机-1号', 'FAN', 1),
-(1, '水泵-1号', 'PUMP', 0),
-(1, '补光灯-1号', 'LIGHT', 1),
-(2, '风机-2号', 'FAN', 0),
-(2, '卷帘-2号', 'CURTAIN', 1);
+(1, '风机-1号', 'FAN', 0),
+(1, '补光灯-1号', 'LIGHT', 0);
 
 -- 插入测试传感器数据
 INSERT INTO gh_sensor_data (greenhouse_id, temperature, humidity, light_intensity, co2_concentration, soil_moisture, soil_ph, record_time) VALUES
