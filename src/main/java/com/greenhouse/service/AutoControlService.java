@@ -50,18 +50,30 @@ public class AutoControlService {
 
         AutoControlConfig.Thresholds t = config.getThresholds();
 
-        // 1. 温度过高 → 自动开启风机
-        if (data.getTemperature() != null && data.getTemperature() > t.getTemperatureHigh()) {
-            controlDeviceByType(greenhouseId, "FAN", true,
-                    String.format("温度过高自动触发：当前 %.1f ℃，阈值 > %.1f ℃",
-                            data.getTemperature(), t.getTemperatureHigh()));
+        // 1. 温度过高 → 自动开启风机；温度恢复正常 → 自动关闭风机
+        if (data.getTemperature() != null) {
+            if (data.getTemperature() > t.getTemperatureHigh()) {
+                controlDeviceByType(greenhouseId, "FAN", true,
+                        String.format("温度过高自动触发：当前 %.1f ℃，阈值 > %.1f ℃",
+                                data.getTemperature(), t.getTemperatureHigh()));
+            } else if (data.getTemperature() <= t.getTemperatureHigh()) {
+                controlDeviceByType(greenhouseId, "FAN", false,
+                        String.format("温度恢复正常：当前 %.1f ℃，阈值 ≤ %.1f ℃",
+                                data.getTemperature(), t.getTemperatureHigh()));
+            }
         }
 
-        // 2. 光照不足 → 自动开启补光灯
-        if (data.getLightIntensity() != null && data.getLightIntensity() < t.getLightLow()) {
-            controlDeviceByType(greenhouseId, "LIGHT", true,
-                    String.format("光照不足自动触发：当前 %.0f Lux，阈值 < %.0f Lux",
-                            data.getLightIntensity(), t.getLightLow()));
+        // 2. 光照不足 → 自动开启补光灯；光照恢复正常 → 自动关闭补光灯
+        if (data.getLightIntensity() != null) {
+            if (data.getLightIntensity() < t.getLightLow()) {
+                controlDeviceByType(greenhouseId, "LIGHT", true,
+                        String.format("光照不足自动触发：当前 %.0f Lux，阈值 < %.0f Lux",
+                                data.getLightIntensity(), t.getLightLow()));
+            } else if (data.getLightIntensity() >= t.getLightLow()) {
+                controlDeviceByType(greenhouseId, "LIGHT", false,
+                        String.format("光照恢复正常：当前 %.0f Lux，阈值 ≥ %.0f Lux",
+                                data.getLightIntensity(), t.getLightLow()));
+            }
         }
     }
 

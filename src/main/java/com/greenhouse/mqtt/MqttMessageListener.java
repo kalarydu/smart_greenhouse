@@ -2,6 +2,7 @@ package com.greenhouse.mqtt;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.greenhouse.config.GreenhouseConfig;
 import com.greenhouse.config.MqttConfig;
 import com.greenhouse.entity.SensorData;
 import com.greenhouse.service.AlertCheckService;
@@ -22,17 +23,23 @@ import java.nio.charset.StandardCharsets;
 public class MqttMessageListener implements MqttCallbackExtended {
 
     private final MqttConfig config;
+    private final GreenhouseConfig greenhouseConfig;
     private final SensorDataService sensorDataService;
     private final SensorDataMergeService sensorDataMergeService;
     private final AlertCheckService alertCheckService;
     private final AutoControlService autoControlService;
     private MqttAsyncClient mqttClient;
 
-    public MqttMessageListener(MqttConfig config, SensorDataService sensorDataService,
+    /** 每个大棚上一次落库时间（内存缓存，重启后重置无影响） */
+    private final java.util.Map<Long, java.time.LocalDateTime> lastSaveTimeMap = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public MqttMessageListener(MqttConfig config, GreenhouseConfig greenhouseConfig,
+                               SensorDataService sensorDataService,
                                SensorDataMergeService sensorDataMergeService,
                                AlertCheckService alertCheckService,
                                AutoControlService autoControlService) {
         this.config = config;
+        this.greenhouseConfig = greenhouseConfig;
         this.sensorDataService = sensorDataService;
         this.sensorDataMergeService = sensorDataMergeService;
         this.alertCheckService = alertCheckService;
@@ -163,18 +170,30 @@ public class MqttMessageListener implements MqttCallbackExtended {
                         topic, payload.length() > 200 ? payload.substring(0, 200) : payload);
                 return;
             }
-            // 增量合并：缺失字段用历史值填充，保证每次入库都是完整 7 字段
+            // 增量合并：缺失字段用历史值填充，保证每次都是完整 7 字段
             data = sensorDataMergeService.merge(data);
-            sensorDataService.save(data);
-            log.info("传感器数据已入库 → 大棚:{} 温度:{}℃ 湿度:{}% 光照:{}Lux CO2:{}ppm 土壤湿度:{}% pH:{}",
-                    data.getGreenhouseId(), data.getTemperature(),
-                    data.getHumidity(), data.getLightIntensity(),
-                    data.getCo2Concentration(), data.getSoilMoisture(),
-                    data.getSoilPh());
-            // 自动检测报警
+
+            // 报警检测 + 自动控制：每条数据都实时检测，不受落库间隔影响
             alertCheckService.checkAndCreateAlerts(data);
-            // 自动设备控制（温度高→开风机，光照低→开补光灯）
             autoControlService.checkAndControl(data);
+
+            // 传感器数据落库：按间隔（默认5分钟）瘦身，节省存储空间
+            Long gid = data.getGreenhouseId();
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            java.time.LocalDateTime lastSave = lastSaveTimeMap.get(gid);
+            int interval = greenhouseConfig.getSaveIntervalMinutes();
+            if (lastSave == null || lastSave.plusMinutes(interval).isBefore(now)) {
+                sensorDataService.save(data);
+                lastSaveTimeMap.put(gid, now);
+                log.info("传感器数据已入库 → 大棚:{} 温度:{}℃ 湿度:{}% 光照:{}Lux CO2:{}ppm 土壤湿度:{}% pH:{}",
+                        gid, data.getTemperature(),
+                        data.getHumidity(), data.getLightIntensity(),
+                        data.getCo2Concentration(), data.getSoilMoisture(),
+                        data.getSoilPh());
+            } else {
+                log.debug("传感器数据跳过保存（{}分钟间隔未到）→ 大棚:{} 温度:{}℃",
+                        interval, gid, data.getTemperature());
+            }
         } catch (Exception e) {
             log.error("消息处理失败", e);
         }
@@ -325,6 +344,15 @@ public class MqttMessageListener implements MqttCallbackExtended {
                 continue;
             }
 
+            // 调试：打印所有属性键名和UTF-8字节
+            log.info("属性键列表: {}", properties.keySet());
+            for (String k : properties.keySet()) {
+                byte[] bytes = k.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                StringBuilder hex = new StringBuilder();
+                for (byte b : bytes) hex.append(String.format("%02X ", b));
+                log.info("  键='{}' 字节=[{}]", k, hex.toString().trim());
+            }
+
             // 设备属性 → SensorData 字段映射（兼容中英文键名）
             // 温度（℃）
             if (properties.containsKey("temperature")) {
@@ -338,9 +366,13 @@ public class MqttMessageListener implements MqttCallbackExtended {
             } else if (properties.containsKey("湿度")) {
                 data.setHumidity(properties.getDouble("湿度"));
             }
-            // 光照强度（Lux）：英文 Luminance / 中文 光照
+            // 光照强度（Lux）：英文 Luminance / 中文 亮度 / 光照强度 / 光照
             if (properties.containsKey("Luminance")) {
                 data.setLightIntensity(properties.getDouble("Luminance"));
+            } else if (properties.containsKey("亮度")) {
+                data.setLightIntensity(properties.getDouble("亮度"));
+            } else if (properties.containsKey("光照强度")) {
+                data.setLightIntensity(properties.getDouble("光照强度"));
             } else if (properties.containsKey("光照")) {
                 data.setLightIntensity(properties.getDouble("光照"));
             }
