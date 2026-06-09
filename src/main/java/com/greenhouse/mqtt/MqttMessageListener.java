@@ -149,27 +149,32 @@ public class MqttMessageListener implements MqttCallbackExtended {
 
             // 根据主题判断消息类型
             if (topic.equals(config.getSubscribeTopicDown())) {
-                // /message/down → 设备属性上报
+                // /message/down → 设备属性上报（通过IoTDA规则引擎转发）
+                log.info("识别为属性上报消息，开始解析...");
                 data = parsePropertyReport(payload);
             } else {
-                // msg/up → 设备消息上行（原有逻辑）
+                // msg/up → 设备消息上行（MQTTX或设备直接发送）
+                log.info("识别为设备上行消息，开始解析...");
                 data = parseSensorData(payload);
             }
 
-            if (data != null) {
-                // 增量合并：缺失字段用历史值填充，保证每次入库都是完整 7 字段
-                data = sensorDataMergeService.merge(data);
-                sensorDataService.save(data);
-                log.info("传感器数据已入库 → 大棚:{} 温度:{}℃ 湿度:{}% 光照:{}Lux CO2:{}ppm 土壤湿度:{}% pH:{}",
-                        data.getGreenhouseId(), data.getTemperature(),
-                        data.getHumidity(), data.getLightIntensity(),
-                        data.getCo2Concentration(), data.getSoilMoisture(),
-                        data.getSoilPh());
-                // 自动检测报警
-                alertCheckService.checkAndCreateAlerts(data);
-                // 自动设备控制（温度高→开风机，光照低→开补光灯）
-                autoControlService.checkAndControl(data);
+            if (data == null) {
+                log.warn("消息解析失败，返回null。topic={} payload前200字符={}",
+                        topic, payload.length() > 200 ? payload.substring(0, 200) : payload);
+                return;
             }
+            // 增量合并：缺失字段用历史值填充，保证每次入库都是完整 7 字段
+            data = sensorDataMergeService.merge(data);
+            sensorDataService.save(data);
+            log.info("传感器数据已入库 → 大棚:{} 温度:{}℃ 湿度:{}% 光照:{}Lux CO2:{}ppm 土壤湿度:{}% pH:{}",
+                    data.getGreenhouseId(), data.getTemperature(),
+                    data.getHumidity(), data.getLightIntensity(),
+                    data.getCo2Concentration(), data.getSoilMoisture(),
+                    data.getSoilPh());
+            // 自动检测报警
+            alertCheckService.checkAndCreateAlerts(data);
+            // 自动设备控制（温度高→开风机，光照低→开补光灯）
+            autoControlService.checkAndControl(data);
         } catch (Exception e) {
             log.error("消息处理失败", e);
         }
@@ -182,10 +187,17 @@ public class MqttMessageListener implements MqttCallbackExtended {
     private SensorData parseSensorData(String payload) {
         JSONObject json = JSON.parseObject(payload);
 
+        // 检测是否为IoTDA规则转发格式（notify_data.body.services）
         if (json.containsKey("notify_data")) {
-            json = json.getJSONObject("notify_data")
-                       .getJSONObject("body")
-                       .getJSONObject("content");
+            JSONObject notifyBody = json.getJSONObject("notify_data")
+                                        .getJSONObject("body");
+            // 转发格式 → 交给 parsePropertyReport 处理
+            if (notifyBody != null && notifyBody.containsKey("services")) {
+                log.info("检测到IoTDA转发格式，使用属性上报解析器");
+                return parsePropertyReport(payload);
+            }
+            // 旧格式：notify_data.body.content → 提取content层
+            json = notifyBody.getJSONObject("content");
         }
 
         SensorData data = new SensorData();
@@ -246,15 +258,19 @@ public class MqttMessageListener implements MqttCallbackExtended {
 
         // 提取 notify_data.body
         if (!json.containsKey("notify_data")) {
-            log.warn("属性上报缺少 notify_data 字段");
+            log.warn("属性上报缺少 notify_data 字段。完整消息: {}", payload.length() > 300 ? payload.substring(0, 300) : payload);
             return null;
         }
         JSONObject body = json.getJSONObject("notify_data")
                               .getJSONObject("body");
+        if (body == null) {
+            log.warn("属性上报 notify_data.body 为空");
+            return null;
+        }
 
-        // 遍历 services 数组，找到 "智慧农业" 服务
+        // 遍历 services 数组，记录所有遇到的 service_id
         if (!body.containsKey("services")) {
-            log.warn("属性上报缺少 services 字段");
+            log.warn("属性上报缺少 services 字段。body内容: {}", body.toJSONString());
             return null;
         }
         var services = body.getJSONArray("services");
@@ -268,7 +284,12 @@ public class MqttMessageListener implements MqttCallbackExtended {
         for (int i = 0; i < services.size(); i++) {
             JSONObject service = services.getJSONObject(i);
             String serviceId = service.getString("service_id");
-            if (!"智慧农业".equals(serviceId)) {
+            log.info("遍历service: service_id={}", serviceId);
+
+            // 跳过的服务：占位符、设备状态服务等非传感器数据
+            if (serviceId == null || "string".equals(serviceId)
+                    || serviceId.contains("设备") || serviceId.equals("Device")) {
+                log.info("跳过非传感器服务: service_id={}", serviceId);
                 continue;
             }
 
@@ -301,40 +322,52 @@ public class MqttMessageListener implements MqttCallbackExtended {
                 continue;
             }
 
-            // 设备属性 → SensorData 字段映射
-            // Luminance → lightIntensity (光照强度 Lux)
-            if (properties.containsKey("Luminance")) {
-                data.setLightIntensity(properties.getDouble("Luminance"));
-            }
-            // temperature → temperature (温度 ℃)
+            // 设备属性 → SensorData 字段映射（兼容中英文键名）
+            // 温度（℃）
             if (properties.containsKey("temperature")) {
                 data.setTemperature(properties.getDouble("temperature"));
+            } else if (properties.containsKey("温度")) {
+                data.setTemperature(properties.getDouble("温度"));
             }
-            // humidity → humidity (空气湿度 %)
+            // 空气湿度（%）
             if (properties.containsKey("humidity")) {
                 data.setHumidity(properties.getDouble("humidity"));
+            } else if (properties.containsKey("湿度")) {
+                data.setHumidity(properties.getDouble("湿度"));
             }
-            // soilMoisture → soilMoisture (土壤湿度 %)
+            // 光照强度（Lux）：英文 Luminance / 中文 光照
+            if (properties.containsKey("Luminance")) {
+                data.setLightIntensity(properties.getDouble("Luminance"));
+            } else if (properties.containsKey("光照")) {
+                data.setLightIntensity(properties.getDouble("光照"));
+            }
+            // 土壤湿度（%）
             if (properties.containsKey("soilMoisture")) {
                 data.setSoilMoisture(properties.getDouble("soilMoisture"));
+            } else if (properties.containsKey("土壤湿度")) {
+                data.setSoilMoisture(properties.getDouble("土壤湿度"));
             }
-            // co2Concentration → co2Concentration (CO2浓度 ppm)
+            // CO2浓度（ppm）
             if (properties.containsKey("co2Concentration")) {
                 data.setCo2Concentration(properties.getDouble("co2Concentration"));
+            } else if (properties.containsKey("二氧化碳浓度")) {
+                data.setCo2Concentration(properties.getDouble("二氧化碳浓度"));
             }
-            // soilPh → soilPh (土壤pH值)
+            // 土壤pH值
             if (properties.containsKey("soilPh")) {
                 data.setSoilPh(properties.getDouble("soilPh"));
+            } else if (properties.containsKey("土壤pH")) {
+                data.setSoilPh(properties.getDouble("土壤pH"));
             }
 
-            log.info("解析属性上报 → service:{} Luminance:{} temperature:{} humidity:{} soilMoisture:{} co2Concentration:{} soilPh:{}",
+            log.info("解析属性上报 → service:{} 温度:{} 湿度:{} 光照:{} 土壤湿度:{} CO2:{} pH:{}",
                     serviceId,
-                    properties.containsKey("Luminance") ? properties.getDouble("Luminance") : "无",
-                    properties.containsKey("temperature") ? properties.getDouble("temperature") : "无",
-                    properties.containsKey("humidity") ? properties.getDouble("humidity") : "无",
-                    properties.containsKey("soilMoisture") ? properties.getDouble("soilMoisture") : "无",
-                    properties.containsKey("co2Concentration") ? properties.getDouble("co2Concentration") : "无",
-                    properties.containsKey("soilPh") ? properties.getDouble("soilPh") : "无");
+                    data.getTemperature() != null ? data.getTemperature() : "无",
+                    data.getHumidity() != null ? data.getHumidity() : "无",
+                    data.getLightIntensity() != null ? data.getLightIntensity() : "无",
+                    data.getSoilMoisture() != null ? data.getSoilMoisture() : "无",
+                    data.getCo2Concentration() != null ? data.getCo2Concentration() : "无",
+                    data.getSoilPh() != null ? data.getSoilPh() : "无");
             break;
         }
 

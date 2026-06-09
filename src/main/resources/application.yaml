@@ -14,10 +14,10 @@ spring:
     host: 768a256764.st1.iotda-app.cn-east-3.myhuaweicloud.com
     port: 8883
     access_key: EzatLvr2
-    access_code: t48kVdsqj4520b8IRRsou9fZrGThqgzF
+    access_code: Bc2BbhObLOcXxYB3AAnNkaCG9gkvApYg
     instance_id:
     subscribe_topic: msg/up
-    subscribe_topic_down: /message/down
+    subscribe_topic_down: message/down
     qos: 0
     # ========== 应用端下发指令，控制设备 ==========
     region_id: cn-east-3

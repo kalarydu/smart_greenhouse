@@ -139,8 +139,12 @@ function toast(msg, type='success') {
 function formatTime(t) { return t ? t.replace('T',' ').substring(0,19) : '-'; }
 
 // ==================== 页面切换 ====================
+let snAutoRefreshTimer = null;  // 传感器页面自动刷新定时器
+
 document.querySelectorAll('.sidebar .tab').forEach(btn => {
     btn.addEventListener('click', () => {
+        // 切页面时清除上一个页面的定时器
+        if (snAutoRefreshTimer) { clearInterval(snAutoRefreshTimer); snAutoRefreshTimer = null; }
         document.querySelectorAll('.sidebar .tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         loadPage(btn.dataset.page);
@@ -356,6 +360,17 @@ function renderSensor(main) {
     snApplyPreset('7d');
     // 加载下方列表
     loadSensorList(1);
+
+    // 启动自动刷新：每 10 秒刷新图表和数据列表（仅刷新第一页，不重置翻页）
+    snAutoRefreshTimer = setInterval(() => {
+        refreshChart();
+        const gid = document.getElementById('snSearchGid').value;
+        let url = `/api/sensor-data/list?page=1&size=10`;
+        if (gid) url += `&greenhouseId=${gid}`;
+        API.get(url).then(res => {
+            if (res.code === 200) updateSensorTable(res.data);
+        });
+    }, 10000);
 }
 
 // ========== 指标按钮 ==========
@@ -543,26 +558,30 @@ function loadSensorList(page) {
 
     API.get(url).then(res => {
         if (res.code !== 200) { toast(res.message, 'error'); return; }
-        const d = res.data;
-        const tbody = document.getElementById('snTableBody');
-        if (!d.records || d.records.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="10">暂无数据</td></tr>';
-        } else {
-            tbody.innerHTML = d.records.map(r => `
-                <tr>
-                    <td>${r.id}</td><td>${r.greenhouseId}</td>
-                    <td>${r.temperature != null ? r.temperature + '℃' : '-'}</td>
-                    <td>${r.humidity != null ? r.humidity + '%' : '-'}</td>
-                    <td>${r.lightIntensity != null ? r.lightIntensity : '-'}</td>
-                    <td>${r.co2Concentration != null ? r.co2Concentration : '-'}</td>
-                    <td>${r.soilMoisture != null ? r.soilMoisture + '%' : '-'}</td>
-                    <td>${r.soilPh != null ? r.soilPh : '-'}</td>
-                    <td>${formatTime(r.recordTime)}</td>
-                    <td><button class="btn btn-danger btn-sm" onclick="deleteSensor(${r.id})">删除</button></td>
-                </tr>`).join('');
-        }
-        renderPagination('snPagination', d.current, d.pages, loadSensorList);
+        updateSensorTable(res.data);
+        renderPagination('snPagination', res.data.current, res.data.pages, loadSensorList);
     });
+}
+
+function updateSensorTable(d) {
+    const tbody = document.getElementById('snTableBody');
+    if (!tbody) return;  // 已切换页面，DOM已销毁
+    if (!d.records || d.records.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="10">暂无数据</td></tr>';
+    } else {
+        tbody.innerHTML = d.records.map(r => `
+            <tr>
+                <td>${r.id}</td><td>${r.greenhouseId}</td>
+                <td>${r.temperature != null ? r.temperature + '℃' : '-'}</td>
+                <td>${r.humidity != null ? r.humidity + '%' : '-'}</td>
+                <td>${r.lightIntensity != null ? r.lightIntensity : '-'}</td>
+                <td>${r.co2Concentration != null ? r.co2Concentration : '-'}</td>
+                <td>${r.soilMoisture != null ? r.soilMoisture + '%' : '-'}</td>
+                <td>${r.soilPh != null ? r.soilPh : '-'}</td>
+                <td>${formatTime(r.recordTime)}</td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteSensor(${r.id})">删除</button></td>
+            </tr>`).join('');
+    }
 }
 
 function deleteSensor(id) {
