@@ -43,8 +43,10 @@ mybatis-plus:
 server:
   port: 8080
 
-# ========== 报警阈值 & 自动控制配置 ==========
+# ========== 大棚 & 报警 & 自动控制配置 ==========
 greenhouse:
+  default-id: 1  # 硬件上报消息缺少 greenhouseId 时默认使用的大棚ID
+
   alert:
     enabled: true
     dedup-hours: 2  # 同一大棚+同一报警类型，2小时内不重复生成

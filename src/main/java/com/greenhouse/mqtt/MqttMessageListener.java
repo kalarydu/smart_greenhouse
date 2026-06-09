@@ -6,6 +6,7 @@ import com.greenhouse.config.MqttConfig;
 import com.greenhouse.entity.SensorData;
 import com.greenhouse.service.AlertCheckService;
 import com.greenhouse.service.AutoControlService;
+import com.greenhouse.service.SensorDataMergeService;
 import com.greenhouse.service.SensorDataService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -22,15 +23,18 @@ public class MqttMessageListener implements MqttCallbackExtended {
 
     private final MqttConfig config;
     private final SensorDataService sensorDataService;
+    private final SensorDataMergeService sensorDataMergeService;
     private final AlertCheckService alertCheckService;
     private final AutoControlService autoControlService;
     private MqttAsyncClient mqttClient;
 
     public MqttMessageListener(MqttConfig config, SensorDataService sensorDataService,
+                               SensorDataMergeService sensorDataMergeService,
                                AlertCheckService alertCheckService,
                                AutoControlService autoControlService) {
         this.config = config;
         this.sensorDataService = sensorDataService;
+        this.sensorDataMergeService = sensorDataMergeService;
         this.alertCheckService = alertCheckService;
         this.autoControlService = autoControlService;
     }
@@ -153,6 +157,8 @@ public class MqttMessageListener implements MqttCallbackExtended {
             }
 
             if (data != null) {
+                // 增量合并：缺失字段用历史值填充，保证每次入库都是完整 7 字段
+                data = sensorDataMergeService.merge(data);
                 sensorDataService.save(data);
                 log.info("传感器数据已入库 → 大棚:{} 温度:{}℃ 湿度:{}% 光照:{}Lux CO2:{}ppm 土壤湿度:{}% pH:{}",
                         data.getGreenhouseId(), data.getTemperature(),
