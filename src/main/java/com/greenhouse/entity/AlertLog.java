@@ -19,13 +19,18 @@ public class AlertLog {
     private Long greenhouseId;
 
     /**
-     * 报警类型：
+     * 报警类型（由系统根据阈值自动检测生成）：
      * TEMP_HIGH - 温度过高
      * TEMP_LOW - 温度过低
      * HUMIDITY_HIGH - 湿度过高
      * HUMIDITY_LOW - 湿度过低
      * CO2_HIGH - CO2浓度过高
+     * CO2_LOW - CO2浓度过低
      * LIGHT_LOW - 光照不足
+     * SOIL_MOISTURE_HIGH - 土壤湿度过高
+     * SOIL_MOISTURE_LOW - 土壤湿度过低
+     * SOIL_PH_HIGH - 土壤pH过高
+     * SOIL_PH_LOW - 土壤pH过低
      */
     private String alertType;
 

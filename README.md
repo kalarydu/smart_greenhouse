@@ -209,12 +209,58 @@ cd demo
 
 ### 报警记录 `/api/alert-log`
 
+> ⚠️ 报警由系统根据传感器数据**自动检测生成**，不再支持手动新增。
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/list?page=1&size=10&greenhouseId=1&status=0` | 分页查询报警 |
-| POST | `/` | 新增报警 |
 | PUT | `/{id}/handle` | 标记报警已处理 |
 | DELETE | `/{id}` | 删除报警 |
+
+---
+
+## 🚨 自动报警机制
+
+当 MQTT 收到传感器数据入库后，系统会自动逐项检测是否超出阈值，超标则自动生成报警记录。同一大棚 + 同一报警类型在 **去重窗口内（默认 2 小时）** 已有未处理报警时，不会重复生成。
+
+### 报警类型与阈值
+
+阈值可在 `application.yaml` 的 `greenhouse.alert.thresholds` 配置段中按需调整。
+
+| 报警类型 | 触发条件 | 默认阈值 |
+|----------|----------|----------|
+| `TEMP_HIGH` | 温度过高 | > 35.0 ℃ |
+| `TEMP_LOW` | 温度过低 | < 15.0 ℃ |
+| `HUMIDITY_HIGH` | 空气湿度过高 | > 90.0 % |
+| `HUMIDITY_LOW` | 空气湿度过低 | < 40.0 % |
+| `CO2_HIGH` | CO2 浓度过高 | > 1000.0 ppm |
+| `CO2_LOW` | CO2 浓度过低 | < 300.0 ppm |
+| `LIGHT_LOW` | 光照不足 | < 5000.0 Lux |
+| `SOIL_MOISTURE_HIGH` | 土壤湿度过高 | > 80.0 % |
+| `SOIL_MOISTURE_LOW` | 土壤湿度过低 | < 30.0 % |
+| `SOIL_PH_HIGH` | 土壤 pH 过高 | > 7.5 |
+| `SOIL_PH_LOW` | 土壤 pH 过低 | < 5.5 |
+
+### 配置示例
+
+```yaml
+greenhouse:
+  alert:
+    enabled: true        # 是否启用自动报警检测
+    dedup-hours: 2       # 去重窗口（小时）
+    thresholds:
+      temperature-low: 15.0
+      temperature-high: 35.0
+      humidity-low: 40.0
+      humidity-high: 90.0
+      co2-low: 300.0
+      co2-high: 1000.0
+      light-low: 5000.0
+      soil-moisture-low: 30.0
+      soil-moisture-high: 80.0
+      soil-ph-low: 5.5
+      soil-ph-high: 7.5
+```
 
 ---
 

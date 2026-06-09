@@ -53,12 +53,6 @@ public class AlertLogController {
         return alertLog != null ? Result.ok(alertLog) : Result.fail("报警记录不存在");
     }
 
-    @PostMapping
-    public Result<?> add(@RequestBody AlertLog alertLog) {
-        boolean saved = alertLogService.save(alertLog);
-        return saved ? Result.ok("新增成功") : Result.fail("新增失败");
-    }
-
     @PutMapping
     public Result<?> update(@RequestBody AlertLog alertLog) {
         boolean updated = alertLogService.updateById(alertLog);

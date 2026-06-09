@@ -382,11 +382,13 @@ function loadGreenhouseCheckboxes() {
             container.innerHTML = '<span style="color:#999;font-size:13px">无大棚数据</span>';
             return;
         }
+        // 按ID升序排列（一号大棚在前）
+        const records = res.data.records.sort((a, b) => a.id - b.id);
         // 首次默认全选
         if (snGreenhouseIds.length === 0) {
-            snGreenhouseIds = res.data.records.map(r => r.id);
+            snGreenhouseIds = records.map(r => r.id);
         }
-        container.innerHTML = res.data.records.map(r => {
+        container.innerHTML = records.map(r => {
             const checked = snGreenhouseIds.includes(r.id) ? 'checked' : '';
             return `<label style="font-size:14px;cursor:pointer;margin-right:16px;user-select:none">
                 <input type="checkbox" value="${r.id}" ${checked} onchange="snToggleGreenhouse()"> ${r.name}
@@ -824,25 +826,7 @@ function renderAlert(main) {
     main.innerHTML = `
         <div class="page-title">🔔 报警记录</div>
         <div class="card">
-            <h3>新增报警</h3>
-            <div class="form-row">
-                <label>大棚ID <input id="alGid" type="number" value="1"></label>
-                <label>报警类型
-                    <select id="alType">
-                        <option value="TEMP_HIGH">温度过高</option>
-                        <option value="TEMP_LOW">温度过低</option>
-                        <option value="HUMIDITY_HIGH">湿度过高</option>
-                        <option value="HUMIDITY_LOW">湿度过低</option>
-                        <option value="CO2_HIGH">CO2过高</option>
-                        <option value="LIGHT_LOW">光照不足</option>
-                    </select>
-                </label>
-                <label>报警内容 <input id="alMsg" placeholder="报警描述"></label>
-            </div>
-            <button class="btn btn-primary" onclick="saveAlert()">💾 新增报警</button>
-        </div>
-        <div class="card">
-            <h3>报警列表</h3>
+            <h3>报警列表（由系统根据传感器数据自动检测生成）</h3>
             <div class="search-bar">
                 <label>大棚ID <input id="alSearchGid" type="number" placeholder="筛选"></label>
                 <label>状态
@@ -863,7 +847,14 @@ function renderAlert(main) {
     loadAlertList(1);
 }
 
-const alertTypeMap = { TEMP_HIGH:'温度过高', TEMP_LOW:'温度过低', HUMIDITY_HIGH:'湿度过高', HUMIDITY_LOW:'湿度过低', CO2_HIGH:'CO2过高', LIGHT_LOW:'光照不足' };
+const alertTypeMap = {
+    TEMP_HIGH:'温度过高', TEMP_LOW:'温度过低',
+    HUMIDITY_HIGH:'湿度过高', HUMIDITY_LOW:'湿度过低',
+    CO2_HIGH:'CO2过高', CO2_LOW:'CO2过低',
+    LIGHT_LOW:'光照不足',
+    SOIL_MOISTURE_HIGH:'土壤湿度过高', SOIL_MOISTURE_LOW:'土壤湿度过低',
+    SOIL_PH_HIGH:'土壤pH过高', SOIL_PH_LOW:'土壤pH过低',
+};
 
 function loadAlertList(page) {
     const gid = document.getElementById('alSearchGid').value;
@@ -894,20 +885,6 @@ function loadAlertList(page) {
                 </tr>`).join('');
         }
         renderPagination('alPagination', d.current, d.pages, loadAlertList);
-    });
-}
-
-function saveAlert() {
-    const data = {
-        greenhouseId: parseInt(document.getElementById('alGid').value) || 1,
-        alertType: document.getElementById('alType').value,
-        message: document.getElementById('alMsg').value.trim(),
-        status: 0
-    };
-    if (!data.message) { toast('请输入报警内容', 'error'); return; }
-    API.post('/api/alert-log', data).then(res => {
-        if (res.code === 200) { toast('报警已记录'); loadAlertList(1); }
-        else toast(res.message, 'error');
     });
 }
 
