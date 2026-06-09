@@ -30,6 +30,9 @@ public class MqttMessageListener implements MqttCallbackExtended {
     private final AutoControlService autoControlService;
     private MqttAsyncClient mqttClient;
 
+    /** 防止并发重连 */
+    private volatile boolean reconnecting = false;
+
     /** 每个大棚上一次落库时间（内存缓存，重启后重置无影响） */
     private final java.util.Map<Long, java.time.LocalDateTime> lastSaveTimeMap = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -53,6 +56,14 @@ public class MqttMessageListener implements MqttCallbackExtended {
 
     private void connect() {
         try {
+            // 关闭旧连接，防止客户端对象累积
+            if (mqttClient != null) {
+                try {
+                    if (mqttClient.isConnected()) mqttClient.disconnect();
+                    mqttClient.close();
+                } catch (Exception ignored) {}
+            }
+
             String serverUri = "ssl://" + config.getHost() + ":" + config.getPort();
             String userName = "accessKey=" + config.getAccessKey()
                     + "|timestamp=" + System.currentTimeMillis()
@@ -64,7 +75,7 @@ public class MqttMessageListener implements MqttCallbackExtended {
             options.setCleanSession(true);
             options.setAutomaticReconnect(false);
             options.setConnectionTimeout(60);
-            options.setKeepAliveInterval(120);
+            options.setKeepAliveInterval(30);  // 30秒心跳，防止NAT/防火墙掐断TCP连接
             options.setUserName(userName);
             options.setPassword(config.getAccessCode().toCharArray());
             options.setHttpsHostnameVerificationEnabled(false);
@@ -74,17 +85,20 @@ public class MqttMessageListener implements MqttCallbackExtended {
                 @Override
                 public void onSuccess(IMqttToken token) {
                     log.info("MQTT 连接成功: {}", serverUri);
+                    reconnecting = false;  // 连接成功后才重置重连标记
                     subscribe();
                 }
 
                 @Override
                 public void onFailure(IMqttToken token, Throwable throwable) {
                     log.error("MQTT 连接失败: {}", throwable.toString());
+                    reconnecting = false;  // 失败时重置，允许下次重连
                     scheduleReconnect();
                 }
             });
         } catch (Exception e) {
             log.error("MQTT 启动失败，10秒后重试", e);
+            reconnecting = false;  // 异常退出时也要重置，避免死锁
             scheduleReconnect();
         }
     }
@@ -124,14 +138,21 @@ public class MqttMessageListener implements MqttCallbackExtended {
     }
 
     private void scheduleReconnect() {
+        // 防止并发重连，如果已经在重连中则跳过
+        if (reconnecting) {
+            log.info("已有重连线程在运行，跳过本次重连请求");
+            return;
+        }
+        reconnecting = true;
         new Thread(() -> {
             try {
                 Thread.sleep(10_000);
                 connect();
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
+                reconnecting = false;
             }
-        }).start();
+        }, "mqtt-reconnect").start();
     }
 
     @Override
