@@ -188,49 +188,416 @@ cd demo
 
 ---
 
-## 📡 API 接口
+## 📡 API 接口文档
+
+> 所有接口统一响应格式：`{ "code": 200, "message": "成功", "data": {...} }`
+
+### 统一响应格式
+
+```json
+{
+  "code": 200,        // 状态码：200 成功，500 失败
+  "message": "成功",   // 提示信息
+  "data": { ... }     // 返回数据（可为对象、数组、字符串或 null）
+}
+```
+
+### 分页响应格式
+
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "records": [ ... ],   // 当前页数据列表
+    "total": 25,          // 总记录数
+    "size": 10,           // 每页条数
+    "current": 1,         // 当前页码
+    "pages": 3            // 总页数
+  }
+}
+```
+
+---
 
 ### 大棚管理 `/api/greenhouse`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/list?page=1&size=10&name=xxx` | 分页查询大棚 |
-| GET | `/{id}` | 查询单个大棚 |
-| POST | `/` | 新增大棚 |
-| PUT | `/` | 修改大棚 |
-| DELETE | `/{id}` | 删除大棚（逻辑删除） |
+| GET | `/api/greenhouse/list` | 分页查询大棚 |
+| GET | `/api/greenhouse/{id}` | 查询单个大棚 |
+| POST | `/api/greenhouse` | 新增大棚 |
+| PUT | `/api/greenhouse` | 修改大棚 |
+| DELETE | `/api/greenhouse/{id}` | 删除大棚（逻辑删除） |
+
+<details>
+<summary><b>GET /api/greenhouse/list</b> — 分页查询</summary>
+
+**请求参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页条数，默认 10 |
+| name | string | 否 | 大棚名称模糊搜索 |
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "records": [
+      {
+        "id": 1,
+        "name": "一号大棚",
+        "location": "A区-东侧",
+        "area": 200.0,
+        "description": "番茄种植大棚",
+        "status": 1,
+        "createTime": "2026-06-01T10:00:00",
+        "updateTime": "2026-06-10T14:30:00"
+      }
+    ],
+    "total": 5, "size": 10, "current": 1, "pages": 1
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>POST /api/greenhouse</b> — 新增大棚</summary>
+
+**请求体：**
+```json
+{
+  "name": "三号大棚",
+  "location": "B区-南侧",
+  "area": 150.0,
+  "description": "黄瓜种植大棚",
+  "status": 1
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| name | string | 是 | 大棚名称 |
+| location | string | 否 | 位置描述 |
+| area | double | 否 | 面积（平方米） |
+| description | string | 否 | 描述 |
+| status | int | 否 | 状态：0-停用，1-运行中，默认 1 |
+
+**响应示例：** `{ "code": 200, "message": "成功", "data": "新增成功" }`
+</details>
+
+<details>
+<summary><b>PUT /api/greenhouse</b> — 修改大棚</summary>
+
+**请求体：** 与新增相同，但必须包含 `id` 字段
+```json
+{
+  "id": 1,
+  "name": "一号大棚(已改造)",
+  "location": "A区-东侧",
+  "area": 250.0,
+  "description": "扩建后的番茄大棚",
+  "status": 1
+}
+```
+</details>
+
+<details>
+<summary><b>DELETE /api/greenhouse/{id}</b> — 删除大棚</summary>
+
+逻辑删除（`deleted=1`），数据不物理删除。
+</details>
+
+---
 
 ### 传感器数据 `/api/sensor-data`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/list?page=1&size=10&greenhouseId=1` | 分页查询传感器数据 |
-| GET | `/chart?metric=temperature&greenhouseIds=1,2&startTime=...&endTime=...` | 📈 图表数据（多棚对比） |
-| GET | `/latest/{greenhouseId}` | 查询大棚最新数据 |
-| POST | `/` | 新增传感器数据 |
-| PUT | `/` | 修改传感器数据 |
-| DELETE | `/{id}` | 删除传感器数据 |
+| GET | `/api/sensor-data/list` | 分页查询传感器数据 |
+| GET | `/api/sensor-data/chart` | 📈 图表数据（多棚多指标对比） |
+| GET | `/api/sensor-data/latest/{greenhouseId}` | 查询大棚最新一条数据 |
+| GET | `/api/sensor-data/{id}` | 查询单条数据 |
+| POST | `/api/sensor-data` | 新增传感器数据 |
+| PUT | `/api/sensor-data` | 修改传感器数据 |
+| DELETE | `/api/sensor-data/{id}` | 删除传感器数据 |
+
+<details>
+<summary><b>GET /api/sensor-data/list</b> — 分页查询</summary>
+
+**请求参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页条数，默认 10 |
+| greenhouseId | long | 否 | 按大棚ID筛选 |
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "records": [
+      {
+        "id": 101,
+        "greenhouseId": 1,
+        "temperature": 26.5,
+        "humidity": 68.0,
+        "lightIntensity": 35000.0,
+        "co2Concentration": 450.0,
+        "soilMoisture": 55.0,
+        "soilPh": 6.8,
+        "recordTime": "2026-06-10T14:00:00",
+        "createTime": "2026-06-10T14:00:01"
+      }
+    ],
+    "total": 1200, "size": 10, "current": 1, "pages": 120
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>GET /api/sensor-data/chart</b> — 📈 图表数据</summary>
+
+**请求参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| metric | string | 是 | 指标：temperature / humidity / lightIntensity / co2Concentration / soilMoisture / soilPh |
+| greenhouseIds | string | 是 | 大棚ID列表，逗号分隔，如 `1,2,3` |
+| startTime | string | 否 | 开始时间，格式 `2026-06-05T00:00:00` |
+| endTime | string | 否 | 结束时间，格式 `2026-06-08T23:59:59` |
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "metric": "temperature",
+    "metricLabel": "温度 (℃)",
+    "series": [
+      {
+        "greenhouseId": 1,
+        "greenhouseName": "一号大棚",
+        "dataPoints": [
+          { "recordTime": "2026-06-10T08:00:00", "value": 24.5 },
+          { "recordTime": "2026-06-10T09:00:00", "value": 26.0 }
+        ]
+      },
+      {
+        "greenhouseId": 2,
+        "greenhouseName": "二号大棚",
+        "dataPoints": [
+          { "recordTime": "2026-06-10T08:00:00", "value": 23.0 },
+          { "recordTime": "2026-06-10T09:00:00", "value": 25.5 }
+        ]
+      }
+    ]
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>POST /api/sensor-data</b> — 新增传感器数据</summary>
+
+**请求体：**
+```json
+{
+  "greenhouseId": 1,
+  "temperature": 26.5,
+  "humidity": 68.0,
+  "lightIntensity": 35000.0,
+  "co2Concentration": 450.0,
+  "soilMoisture": 55.0,
+  "soilPh": 6.8,
+  "recordTime": "2026-06-10T14:00:00"
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| greenhouseId | long | 是 | 所属大棚ID |
+| temperature | double | 否 | 温度（℃） |
+| humidity | double | 否 | 空气湿度（%） |
+| lightIntensity | double | 否 | 光照强度（Lux） |
+| co2Concentration | double | 否 | CO2浓度（ppm） |
+| soilMoisture | double | 否 | 土壤湿度（%） |
+| soilPh | double | 否 | 土壤pH值 |
+| recordTime | string | 否 | 记录时间，不填则使用当前时间 |
+</details>
+
+---
 
 ### 设备管理 `/api/device`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/list?page=1&size=10&greenhouseId=1&deviceType=FAN` | 分页查询设备 |
-| GET | `/{id}` | 查询单个设备 |
-| POST | `/` | 新增设备 |
-| PUT | `/` | 修改设备 |
-| PUT | `/{id}/toggle` | 开关设备（下发MQTT指令） |
-| DELETE | `/{id}` | 删除设备 |
+| GET | `/api/device/list` | 分页查询设备 |
+| GET | `/api/device/{id}` | 查询单个设备 |
+| POST | `/api/device` | 新增设备 |
+| PUT | `/api/device` | 修改设备 |
+| PUT | `/api/device/{id}/toggle` | 🔌 开关设备（下发 MQTT 指令） |
+| DELETE | `/api/device/{id}` | 删除设备 |
+
+<details>
+<summary><b>GET /api/device/list</b> — 分页查询</summary>
+
+**请求参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页条数，默认 10 |
+| greenhouseId | long | 否 | 按大棚ID筛选 |
+| deviceType | string | 否 | 按设备类型筛选：FAN / PUMP / LIGHT / CURTAIN |
+</details>
+
+<details>
+<summary><b>POST /api/device</b> — 新增设备</summary>
+
+**请求体：**
+```json
+{
+  "greenhouseId": 1,
+  "deviceName": "风机-1号",
+  "deviceType": "FAN",
+  "status": 0
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| greenhouseId | long | 是 | 所属大棚ID |
+| deviceName | string | 是 | 设备名称 |
+| deviceType | string | 是 | 设备类型：FAN-风机 / PUMP-水泵 / LIGHT-补光灯 / CURTAIN-卷帘 |
+| status | int | 否 | 初始状态：0-关闭（默认），1-开启 |
+</details>
+
+<details>
+<summary><b>PUT /api/device/{id}/toggle</b> — 🔌 开关设备</summary>
+
+切换设备开关状态并通过华为云 IoTDA 下发 MQTT 指令到真实设备。
+
+**指令映射：**
+
+| 设备类型 | MQTT 指令名 | 下发参数 |
+|----------|------------|----------|
+| FAN（风机） | 电机控制 | `{"motor":"ON"/"OFF"}` |
+| LIGHT（补光灯） | 紫光灯控制 | `{"light":"ON"/"OFF"}` |
+| PUMP（水泵） | 水泵控制 | `{"pump":"ON"/"OFF"}` |
+| CURTAIN（卷帘） | 卷帘控制 | `{"curtain":"ON"/"OFF"}` |
+
+**响应示例：** `{ "code": 200, "message": "成功", "data": "设备已开启，指令已下发" }`
+</details>
+
+---
 
 ### 报警记录 `/api/alert-log`
 
-> ⚠️ 报警由系统根据传感器数据**自动检测生成**，不再支持手动新增。
+> ⚠️ 报警由系统根据传感器数据**自动检测生成**，不提供手动新增接口。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/list?page=1&size=10&greenhouseId=1&status=0` | 分页查询报警 |
-| PUT | `/{id}/handle` | 标记报警已处理 |
-| DELETE | `/{id}` | 删除报警 |
+| GET | `/api/alert-log/list` | 分页查询报警 |
+| GET | `/api/alert-log/{id}` | 查询单条报警 |
+| PUT | `/api/alert-log` | 修改报警 |
+| PUT | `/api/alert-log/{id}/handle` | ✅ 标记报警已处理 |
+| DELETE | `/api/alert-log/{id}` | 删除报警 |
+
+<details>
+<summary><b>GET /api/alert-log/list</b> — 分页查询</summary>
+
+**请求参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页条数，默认 10 |
+| greenhouseId | long | 否 | 按大棚ID筛选 |
+| alertType | string | 否 | 按报警类型筛选 |
+| status | int | 否 | 按状态筛选：0-未处理，1-已处理 |
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "records": [
+      {
+        "id": 10,
+        "greenhouseId": 1,
+        "alertType": "TEMP_HIGH",
+        "message": "一号大棚温度过高：38.5℃（阈值：35.0℃）",
+        "status": 0,
+        "createTime": "2026-06-10T14:30:00",
+        "handleTime": null
+      }
+    ],
+    "total": 3, "size": 10, "current": 1, "pages": 1
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>PUT /api/alert-log/{id}/handle</b> — ✅ 处理报警</summary>
+
+将报警状态改为"已处理"，自动设置 `handleTime` 为当前时间。
+
+**响应示例：** `{ "code": 200, "message": "成功", "data": "报警已处理" }`
+</details>
+
+---
+
+### AI 助手 `/api/ai`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/ai/chat` | 🤖 发送消息给 AI 助手 |
+
+<details>
+<summary><b>POST /api/ai/chat</b> — AI 对话</summary>
+
+**请求体：**
+```json
+{
+  "message": "一号大棚最近有什么异常吗？"
+}
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "message": "成功",
+  "data": {
+    "reply": "根据最近24小时的数据分析，一号大棚运行状态良好..."
+  }
+}
+```
+</details>
+
+---
+
+### 错误码说明
+
+| code | 说明 |
+|------|------|
+| 200 | 请求成功 |
+| 500 | 业务错误（详见 message 字段） |
+
+> 异常情况（如 404、参数校验失败）会由 Spring Boot 默认处理，返回标准 HTTP 错误码。
 
 ---
 
