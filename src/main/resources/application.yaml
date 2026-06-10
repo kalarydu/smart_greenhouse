@@ -46,7 +46,7 @@ server:
 # ========== 大棚 & 报警 & 自动控制配置 ==========
 greenhouse:
   default-id: 1  # 硬件上报消息缺少 greenhouseId 时默认使用的大棚ID
-  save-interval-minutes: 5  # 传感器数据落库间隔（分钟），报警和自动控制仍然是实时检测
+  save-interval-minutes: 1  # 传感器数据落库间隔（分钟），报警和自动控制仍然是实时检测
 
   alert:
     enabled: true
