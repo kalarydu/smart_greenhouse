@@ -71,6 +71,25 @@ greenhouse:
       temperature-high: 30.0   # ℃，高于此值 → 自动开启风机
       light-low: 500.0        # Lux，低于此值 → 自动开启补光灯
 
+# ========== MinIO 对象存储配置 ==========
+minio:
+  endpoints:
+    - 127.0.0.1:9000
+    - 169.254.105.187:9000
+    - 10.190.83.10:9000
+    - 192.168.206.1:9000
+    - 192.168.44.1:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  secure: false
+  default-bucket: crops
+
+# ========== ONNX 农作物分类模型配置 ==========
+crop:
+  image:
+    width: 320
+    height: 320
+
 # ========== DeepSeek AI 配置 ==========
 deepseek:
   api-key: sk-ebc2ba88aa774fefa176a321558ff4b0  # ⚠️ 替换为你的 DeepSeek API Key

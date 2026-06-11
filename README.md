@@ -13,6 +13,8 @@
 | 数据库 | MySQL 8.0 |
 | 消息协议 | MQTT (Eclipse Paho) |
 | IoT 平台 | 华为云 IoTDA |
+| 对象存储 | MinIO（图片存储） |
+| AI 推理 | ONNX Runtime（YOLOv8 作物分类） |
 | 前端 | 原生 HTML/CSS/JS + Chart.js |
 | 构建工具 | Maven |
 
@@ -23,18 +25,30 @@
 ```
 demo/
 ├── src/main/java/com/greenhouse/
-│   ├── common/           # 通用类（统一响应 Result）
-│   ├── config/           # 配置类（MyBatis Plus、MQTT、报警阈值、自动控制）
-│   ├── controller/       # REST 接口
-│   ├── entity/           # 数据库实体
-│   ├── mapper/           # MyBatis Mapper
-│   ├── mqtt/             # MQTT 消息监听与下发
-│   ├── service/          # 业务逻辑（报警检测、自动控制）
-│   └── service/impl/     # 业务逻辑实现
+│   ├── DemoApplication.java    # Spring Boot 启动类
+│   ├── common/                 # 通用类（统一响应 Result）
+│   ├── config/                 # 配置类（MyBatis Plus、MQTT、报警阈值、自动控制、MinIO）
+│   ├── controller/             # REST 接口
+│   ├── entity/                 # 数据库实体
+│   ├── mapper/                 # MyBatis Mapper
+│   ├── mqtt/                   # MQTT 消息监听与下发
+│   ├── onnx/                   # ONNX 模型推理（YOLOv8 作物分类）
+│   │   ├── CropClassifierONNX.java       # 推理核心
+│   │   ├── controller/ClassifierController.java  # 分类 REST 接口
+│   │   └── service/ClassifierService.java        # 分类服务
+│   ├── service/                # 业务逻辑
+│   │   ├── MinioService.java   # MinIO 图片拉取服务
+│   │   └── ...
+│   └── service/impl/           # 业务逻辑实现
 ├── src/main/resources/
-│   ├── application.yaml  # ⚠️ 核心配置文件（需要改！）
-│   ├── init.sql          # 数据库初始化脚本
-│   └── static/index.html # 前端页面
+│   ├── application.yaml        # ⚠️ 核心配置文件
+│   ├── init.sql                # 数据库初始化脚本
+│   ├── models/best.onnx        # YOLOv8 作物分类模型（14类）
+│   └── static/index.html       # 前端页面
+├── src/test/java/com/greenhouse/
+│   ├── OnnxClassifierTest.java # ONNX 分类测试（含 MinIO 联动）
+│   └── MinioOnnxRunner.java    # 🆕 MinIO+YOLO 独立测试启动器
+├── test/result/                # 🆕 测试结果输出目录（自动生成）
 └── pom.xml
 ```
 
@@ -141,33 +155,39 @@ cd demo
 └─────────────┘                      └──────┬───────┘
                                            │ MQTT 订阅
                                            ▼
-                                  ┌────────────────────┐
-                                  │  Spring Boot 应用   │
-                                  │                    │
-                                  │  MqttMessageListener│
-                                  │    ↓ 解析消息       │
-                                  │  SensorDataService  │
-                                  │    ↓ 入库           │
-                                  │  AlertCheckService  │ ← 报警检测
-                                  │  AutoControlService │ ← 🆕 自动控制
-                                  │    ↓ 下发指令       │
-                                  │  MqttSendUtil       │
-                                  └────────┬───────────┘
-                                           │ JDBC(3306)
-                                           ▼
-                                  ┌────────────────────┐
-                                  │    MySQL 数据库     │
-                                  │  gh_sensor_data     │
-                                  │  gh_alert_log       │
-                                  │  gh_device          │
-                                  │  gh_greenhouse      │
-                                  └────────┬───────────┘
-                                           │ REST API(8080)
-                                           ▼
-                                  ┌────────────────────┐
-                                  │   浏览器前端        │
-                                  │  (Chart.js 图表)    │
-                                  └────────────────────┘
+┌─────────────┐                    ┌────────────────────┐
+│  MinIO      │ ←── 拉取图片 ──── │  Spring Boot 应用   │
+│  对象存储   │                    │                    │
+│  (图片仓库) │                    │  MqttMessageListener│
+└─────────────┘                    │    ↓ 解析消息       │
+                                   │  SensorDataService  │
+                                   │    ↓ 入库           │
+                                   │  AlertCheckService  │ ← 报警检测
+                                   │  AutoControlService │ ← 🆕 自动控制
+                                   │    ↓ 下发指令       │
+                                   │  MqttSendUtil       │
+                                   │                     │
+                                   │  ┌────────────────┐ │
+                                   │  │ ONNX 分类模块   │ │
+                                   │  │ MinioService    │ │ ← 从 MinIO 拉图
+                                   │  │ ClassifierService│ │ ← YOLO 推理
+                                   │  └────────────────┘ │
+                                   └────────┬───────────┘
+                                            │ JDBC(3306)
+                                            ▼
+                                   ┌────────────────────┐
+                                   │    MySQL 数据库     │
+                                   │  gh_sensor_data     │
+                                   │  gh_alert_log       │
+                                   │  gh_device          │
+                                   │  gh_greenhouse      │
+                                   └────────┬───────────┘
+                                            │ REST API(8080)
+                                            ▼
+                                   ┌────────────────────┐
+                                   │   浏览器前端        │
+                                   │  (Chart.js 图表)    │
+                                   └────────────────────┘
 ```
 
 ### 数据流转
@@ -178,6 +198,7 @@ cd demo
 4. **报警检测** → `AlertCheckService` 逐项检测阈值，超标自动生成报警记录
 5. **🆕 自动控制** → `AutoControlService` 检测温度/光照，自动开关风机/补光灯
 6. **指令下发** → 手动或自动触发 → `MqttSendUtil` 通过华为云 API 向设备下发控制指令
+7. **☁️ 图片分类** → 前端/定时任务触发 → `MinioService` 从 MinIO 拉取图片 → `ClassifierService` 调用 ONNX YOLO 模型推理 → 返回生长周期识别结果
 
 ### 两种 MQTT 消息处理
 
@@ -590,6 +611,131 @@ cd demo
 
 ---
 
+---
+
+### 🆕 作物图像分类 `/api/classify`
+
+基于 ONNX Runtime 的 YOLOv8 作物生长周期识别，支持 14 个类别（棉花、草莓、向日葵的生长阶段）。
+
+> 支持三种图片来源：**文件上传** / **本地路径** / **MinIO 对象存储**。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/classify` | 📤 上传图片进行预测 |
+| POST | `/api/classify/path` | 📁 通过本地路径预测 |
+| POST | `/api/classify/minio` | ☁️ 从 MinIO 拉取图片并预测 |
+| GET | `/api/classify/classes` | 📋 获取支持的 14 个类别 |
+| GET | `/api/classify/health` | ❤️ 模型健康检查 |
+
+<details>
+<summary><b>POST /api/classify</b> — 上传图片预测</summary>
+
+**请求：** `multipart/form-data`，key 为 `file`
+
+```bash
+curl -X POST http://localhost:8080/api/classify \
+  -F "file=@cotton_flowering.png"
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "data": {
+    "classId": 0,
+    "classNameEn": "cotton_flowering",
+    "classNameCn": "棉花-开花期",
+    "confidence": 0.9521,
+    "top3": [
+      { "classId": 0, "classNameCn": "棉花-开花期", "probability": 0.9521 },
+      { "classId": 1, "classNameCn": "棉花-结果期", "probability": 0.0312 },
+      { "classId": 2, "classNameCn": "棉花-成株期", "probability": 0.0089 }
+    ]
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>POST /api/classify/path</b> — 本地路径预测</summary>
+
+**请求体：**
+```json
+{
+  "imagePath": "F:\\images\\cotton_flowering.png"
+}
+```
+
+```bash
+curl -X POST http://localhost:8080/api/classify/path \
+  -H "Content-Type: application/json" \
+  -d '{"imagePath": "F:\\images\\cotton_flowering.png"}'
+```
+</details>
+
+<details>
+<summary><b>POST /api/classify/minio</b> — ☁️ MinIO 拉取预测</summary>
+
+从 MinIO 对象存储中拉取图片，直接送入 YOLO 模型推理，全程无磁盘写入。
+
+**请求体：**
+```json
+{
+  "bucket": "crops",
+  "objectName": "test/cotton_flowering/aug_0_5367.png"
+}
+```
+
+> `bucket` 可选，不填则使用配置文件中的 `minio.default-bucket`（默认 `crops`）。
+
+```bash
+curl -X POST http://localhost:8080/api/classify/minio \
+  -H "Content-Type: application/json" \
+  -d '{"bucket": "crops", "objectName": "test/cotton_flowering/aug_0_5367.png"}'
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "data": {
+    "classId": 0,
+    "classNameEn": "cotton_flowering",
+    "classNameCn": "棉花-开花期",
+    "confidence": 0.9876,
+    "source": "minio",
+    "bucket": "crops",
+    "objectName": "test/cotton_flowering/aug_0_5367.png"
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>GET /api/classify/classes</b> — 支持的类别</summary>
+
+返回 YOLOv8 模型支持的 14 个作物生长周期类别：
+
+| ID | 英文名 | 中文名 |
+|----|--------|--------|
+| 0 | cotton_flowering | 棉花-开花期 |
+| 1 | cotton_fruiting | 棉花-结果期 |
+| 2 | cotton_plant | 棉花-成株期 |
+| 3 | cotton_seedling | 棉花-幼苗期 |
+| 4 | cotton_sprout | 棉花-发芽期 |
+| 5 | strawberry_flowering | 草莓-开花期 |
+| 6 | strawberry_fruiting | 草莓-结果期 |
+| 7 | strawberry_growing | 草莓-生长期 |
+| 8 | strawberry_mature | 草莓-成熟期 |
+| 9 | sunflower_earlyBloom | 向日葵-早花期 |
+| 10 | sunflower_healthy | 向日葵-健康期 |
+| 11 | sunflower_matureBud | 向日葵-成熟花蕾期 |
+| 12 | sunflower_wilted | 向日葵-枯萎期 |
+| 13 | sunflower_youngBud | 向日葵-幼蕾期 |
+</details>
+
+---
+
 ### 错误码说明
 
 | code | 说明 |
@@ -598,6 +744,40 @@ cd demo
 | 500 | 业务错误（详见 message 字段） |
 
 > 异常情况（如 404、参数校验失败）会由 Spring Boot 默认处理，返回标准 HTTP 错误码。
+
+---
+
+## ☁️ MinIO 对象存储配置
+
+MinIO 用于存储农作物图片，供分类模型拉取推理。配置在 `application.yaml` 中：
+
+```yaml
+minio:
+  endpoints:                    # 端点列表，按顺序尝试连接
+    - 127.0.0.1:9000
+    - 10.190.83.10:9000
+  access-key: minioadmin        # 访问密钥
+  secret-key: minioadmin        # 密钥
+  secure: false                 # 是否使用 TLS（https）
+  default-bucket: crops         # 默认 bucket
+```
+
+### 核心类
+
+| 类 | 职责 |
+|------|------|
+| `config/MinioConfig.java` | 绑定 `minio.*` YAML 配置 |
+| `service/MinioService.java` | MinIO 客户端，封装图片拉取、列举对象、批量获取 |
+| `onnx/service/ClassifierService.java` | 注入 MinioService，提供 `predictFromMinio()` 方法 |
+
+### MinioService 方法
+
+| 方法 | 说明 |
+|------|------|
+| `getImageBytes(bucket, objectName)` | 获取单张图片字节数组（无磁盘写入） |
+| `getImageBytes(objectName)` | 使用默认 bucket 获取 |
+| `listObjects(bucket, prefix)` | 列举对象名称 |
+| `getImagesBatch(bucket, prefix, maxFiles)` | 批量获取图片字节 |
 
 ---
 
@@ -696,6 +876,116 @@ greenhouse:
 |------|------|
 | `config/AutoControlConfig.java` | 读取 YAML 配置（`greenhouse.auto-control`） |
 | `service/AutoControlService.java` | 检测阈值、查询设备、更新状态、下发 MQTT |
+
+---
+
+## 🧪 MinIO + YOLO 定时自动分类测试（`MinioOnnxRunner`）
+
+独立测试启动器，**不依赖 Spring 上下文**，直接连接 MinIO 拉取图片 → ONNX YOLO 模型推理 → 保存结果 JSON。
+
+### 快速运行
+
+```bash
+# 1. 编译测试代码
+mvn test-compile
+
+# 2. 获取 classpath 并运行（单轮 5 张图片）
+mvn -q dependency:build-classpath -DincludeScope=compile -Dmdep.outputFile=/tmp/cp.txt
+java -cp "target/test-classes;target/classes;$(cat /tmp/cp.txt)" \
+    com.greenhouse.MinioOnnxRunner \
+    --batch-size=5 --rounds=1
+```
+
+### 命令行参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--batch-size=N` | 5 | 每轮拉取多少张图片 |
+| `--interval=N` | 30 | 轮询间隔（秒） |
+| `--rounds=N` | 3 | 总轮数，0 = 无限循环直到 Ctrl+C |
+| `--bucket=xxx` | crops | MinIO bucket 名称 |
+| `--prefix=xxx` | test/ | MinIO 对象前缀 |
+| `--endpoint=xxx` | http://10.190.83.10:9000 | MinIO 地址 |
+| `--access-key=xxx` | minioadmin | 访问密钥 |
+| `--secret-key=xxx` | minioadmin | 密钥 |
+
+> 支持 `--key=value` 和 `--key value` 两种参数格式。
+
+### 使用示例
+
+```bash
+# 单次测试：拉 10 张图片，跑 1 轮
+java -cp ... com.greenhouse.MinioOnnxRunner --batch-size=10 --rounds=1
+
+# 定时轮询：每 60 秒拉 5 张，无限循环
+java -cp ... com.greenhouse.MinioOnnxRunner --batch-size=5 --interval=60 --rounds=0
+
+# 指定 bucket 和前缀
+java -cp ... com.greenhouse.MinioOnnxRunner --bucket=img --prefix=cotton/ --batch-size=3 --rounds=3
+```
+
+### 输出结果
+
+每轮结果保存到 `test/result/round_NNN_yyyyMMdd_HHmmss.json`：
+
+```json
+{
+  "round": 1,
+  "timestamp": "2026-06-11T15:46:24",
+  "bucket": "crops",
+  "prefix": "test/",
+  "totalFetched": 5,
+  "successCount": 5,
+  "failCount": 0,
+  "avgMs": 108,
+  "avgConfidence": 0.8867,
+  "classDistribution": {
+    "棉花-开花期": 1,
+    "向日葵-早花期": 3,
+    "棉花-结果期": 1
+  },
+  "records": [
+    {
+      "fileName": "aug_49_1034.png",
+      "objectName": "test/cotton_flowering/aug_49_1034.png",
+      "classNameCn": "棉花-开花期",
+      "confidence": 0.9999,
+      "elapsedMs": 337
+    }
+  ]
+}
+```
+
+### 核心流程
+
+```
+MinioOnnxRunner.main()
+  ├─ [1/2] MinioClient 连接 MinIO 对象存储
+  ├─ [2/2] CropClassifierONNX 加载 YOLOv8 模型
+  └─ 循环（按 --rounds 和 --interval 控制）
+       ├─ listObjects()     列举 MinIO 对象
+       ├─ 随机选取 batchSize 张
+       ├─ 逐张：getImageBytes() → classifier.predict(byte[])
+       ├─ saveRoundResult()  保存本轮结果 JSON
+       └─ Thread.sleep()     等待下一轮
+```
+
+### JUnit 测试
+
+也可以通过 JUnit 运行 MinIO 联动测试：
+
+```bash
+# MinIO 单张图片测试
+mvn test -Dtest=OnnxClassifierTest#testMinioSingleImage
+
+# MinIO 批量测试（10 张 + 保存结果）
+mvn test -Dtest=OnnxClassifierTest#testMinioBatch
+
+# 运行全部测试（含本地 + MinIO）
+mvn test -Dtest=OnnxClassifierTest
+```
+
+> ⚠️ 注意：JUnit 测试依赖 Spring 上下文，需要 MySQL 可用。如果只想测试 MinIO+ONNX 联动，推荐使用 `MinioOnnxRunner` 独立启动器。
 
 ---
 

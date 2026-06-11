@@ -75,6 +75,20 @@
             <version>3.1.144</version>
         </dependency>
 
+        <!-- MinIO SDK：从对象存储拉取农作物图片 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.10</version>
+        </dependency>
+
+        <!-- ONNX Runtime：农作物图像分类模型推理 -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.19.2</version>
+        </dependency>
+
         <!-- Spring Boot Test：单元测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

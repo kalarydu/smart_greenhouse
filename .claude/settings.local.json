@@ -39,7 +39,12 @@
       "Bash(xargs -r taskkill //F //PID {})",
       "Bash(curl -s \"http://localhost:8080/api/greenhouse/list?page=1&size=2\")",
       "Bash(curl *)",
-      "Bash(dir F:\\\\internship\\\\javaworkspace\\\\demo *)"
+      "Bash(dir F:\\\\internship\\\\javaworkspace\\\\demo *)",
+      "Bash(mkdir -p \"F:/internship/javaworkspace/demo/src/main/resources/models\")",
+      "Bash(mkdir -p \"F:/internship/javaworkspace/demo/src/main/java/com/greenhouse/onnx/service\")",
+      "Bash(mkdir -p \"F:/internship/javaworkspace/demo/src/main/java/com/greenhouse/onnx/controller\")",
+      "Bash(cp \"F:/QQ/spring-boot-onnx/spring-boot-onnx/models/best.onnx\" \"F:/internship/javaworkspace/demo/src/main/resources/models/best.onnx\")",
+      "Bash(./mvnw test-compile *)"
     ]
   }
 }

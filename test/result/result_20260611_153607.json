@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-06-11T15:36:07.1329008",
+  "bucket": "crops",
+  "prefix": "test/",
+  "totalFetched": 10,
+  "successCount": 10,
+  "failCount": 0,
+  "totalMs": 586,
+  "avgMs": 58,
+  "avgConfidence": 0.9844,
+  "classDistribution": {
+    "向日葵-健康期": 5,
+    "向日葵-早花期": 4,
+    "棉花-开花期": 1
+  },
+  "records": [
+    {"fileName": "Healthy_865 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9568, "elapsedMs": 266},
+    {"fileName": "EarlyBloom_882 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 0.9852, "elapsedMs": 49},
+    {"fileName": "Healthy_822 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9952, "elapsedMs": 38},
+    {"fileName": "EarlyBloom_471 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 0.9509, "elapsedMs": 20},
+    {"fileName": "Healthy_568 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9999, "elapsedMs": 51},
+    {"fileName": "aug_9_4875.png", "classNameCn": "棉花-开花期", "confidence": 0.9999, "elapsedMs": 73},
+    {"fileName": "EarlyBloom_709 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 0.9998, "elapsedMs": 18},
+    {"fileName": "Healthy_219 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9999, "elapsedMs": 24},
+    {"fileName": "EarlyBloom_136 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 0.9732, "elapsedMs": 27},
+    {"fileName": "Healthy_814 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9835, "elapsedMs": 20}
+  ]
+}

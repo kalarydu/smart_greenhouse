@@ -1,0 +1,24 @@
+{
+  "round": 4,
+  "timestamp": "2026-06-11T15:44:38.5955685",
+  "bucket": "crops",
+  "prefix": "test/",
+  "totalFetched": 5,
+  "successCount": 5,
+  "failCount": 0,
+  "totalMs": 223,
+  "avgMs": 44,
+  "avgConfidence": 0.9711,
+  "classDistribution": {
+    "向日葵-健康期": 2,
+    "向日葵-早花期": 2,
+    "棉花-结果期": 1
+  },
+  "records": [
+    {"fileName": "Healthy_500 (Small).jpg", "objectName": "test/sunflower_healthy/Healthy_500 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.8583, "elapsedMs": 40},
+    {"fileName": "EarlyBloom_1005 (Small).jpg", "objectName": "test/sunflower_earlyBloom/EarlyBloom_1005 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 0.9998, "elapsedMs": 35},
+    {"fileName": "EarlyBloom_309 (Small).jpg", "objectName": "test/sunflower_earlyBloom/EarlyBloom_309 (Small).jpg", "classNameCn": "向日葵-早花期", "confidence": 1.0000, "elapsedMs": 31},
+    {"fileName": "Healthy_187 (Small).jpg", "objectName": "test/sunflower_healthy/Healthy_187 (Small).jpg", "classNameCn": "向日葵-健康期", "confidence": 0.9976, "elapsedMs": 31},
+    {"fileName": "aug_1_7897.png", "objectName": "test/cotton_fruit/aug_1_7897.png", "classNameCn": "棉花-结果期", "confidence": 1.0000, "elapsedMs": 86}
+  ]
+}
