@@ -70,6 +70,25 @@ CREATE TABLE IF NOT EXISTS gh_alert_log (
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报警记录表';
 
+-- 6. 作物图像分类结果表（MinIO + YOLO 定时分类）
+CREATE TABLE IF NOT EXISTS gh_classification_result (
+    id               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    greenhouse_key   VARCHAR(50)  NOT NULL              COMMENT '大棚标识：cotton/sunflower/strawberry',
+    greenhouse_name  VARCHAR(50)  NOT NULL              COMMENT '大棚中文名',
+    object_name      VARCHAR(500) NOT NULL              COMMENT 'MinIO 对象路径',
+    file_name        VARCHAR(200) NOT NULL              COMMENT '文件名',
+    class_id         INT          DEFAULT 0             COMMENT '分类类别ID (0-13)',
+    class_name_cn    VARCHAR(50)  DEFAULT ''            COMMENT '中文类别名',
+    class_name_en    VARCHAR(50)  DEFAULT ''            COMMENT '英文类别名',
+    confidence       DOUBLE       DEFAULT 0             COMMENT '置信度 [0,1]',
+    elapsed_ms       BIGINT       DEFAULT 0             COMMENT '推理耗时（毫秒）',
+    image_size       BIGINT       DEFAULT 0             COMMENT '图片大小（字节）',
+    create_time      DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '分类时间',
+    PRIMARY KEY (id),
+    INDEX idx_greenhouse_key (greenhouse_key),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作物图像分类结果表';
+
 -- =============================================
 -- 以下为测试数据（可选）
 -- =============================================

@@ -127,7 +127,7 @@ public class MinioService {
                     names.add(item.objectName());
                 }
             }
-            log.debug("列举 {}/{}: {} 个对象", bucket, prefix, names.size());
+            log.info("列举 {}/{}: {} 个对象", bucket, prefix, names.size());
         } catch (Exception e) {
             log.error("列举对象失败: {}/{} — {}", bucket, prefix, e.getMessage());
             throw new RuntimeException("从 MinIO 列举对象失败", e);

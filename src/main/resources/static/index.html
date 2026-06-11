@@ -102,6 +102,38 @@
         .typing-dot:nth-child(2) { animation-delay: .2s; }
         .typing-dot:nth-child(3) { animation-delay: .4s; }
         @keyframes typing { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
+
+        /* 作物监测卡片 */
+        .crop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .crop-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow: hidden; transition: .2s; }
+        .crop-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-2px); }
+        .crop-card-header { padding: 16px 20px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .crop-card-header.strawberry { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+        .crop-card-header.sunflower { background: linear-gradient(135deg, #f9ca24, #f0932b); }
+        .crop-card-header.cotton { background: linear-gradient(135deg, #a4b0be, #747d8c); }
+        .crop-card-header .crop-icon { font-size: 32px; }
+        .crop-card-header .crop-name { font-size: 20px; font-weight: bold; }
+        .crop-card-body { padding: 16px 20px; }
+        .crop-result { text-align: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+        .crop-result .stage { font-size: 24px; font-weight: bold; color: #333; margin: 8px 0; }
+        .crop-result .confidence { font-size: 14px; color: #888; }
+        .confidence-bar { height: 8px; background: #f0f0f0; border-radius: 4px; margin: 10px 0; overflow: hidden; }
+        .confidence-bar-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+        .conf-high { background: #52c41a; }
+        .conf-mid { background: #faad14; }
+        .conf-low { background: #ff4d4f; }
+        .crop-meta { font-size: 12px; color: #999; margin-top: 10px; }
+        .crop-history { margin-top: 12px; }
+        .crop-history table { font-size: 12px; }
+        .crop-history th, .crop-history td { padding: 6px 8px; }
+        .crop-empty { text-align: center; padding: 30px; color: #bbb; }
+        .sse-status { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 13px; }
+        .sse-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+        .sse-dot.connected { background: #52c41a; animation: pulse 2s infinite; }
+        .sse-dot.disconnected { background: #ff4d4f; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        @media (max-width: 900px) { .crop-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -113,6 +145,7 @@
     <button class="tab" data-page="sensor">🌡️ 传感器数据</button>
     <button class="tab" data-page="device">⚙️ 设备管理</button>
     <button class="tab" data-page="alert">🔔 报警记录</button>
+    <button class="tab" data-page="crops">🌾 作物监测</button>
     <button class="tab" data-page="ai">🤖 AI助手</button>
 </nav>
 
@@ -158,6 +191,7 @@ function loadPage(page) {
         case 'sensor': renderSensor(main); break;
         case 'device': renderDevice(main); break;
         case 'alert': renderAlert(main); break;
+        case 'crops': renderCropMonitor(main); break;
         case 'ai': renderAi(main); break;
     }
 }
@@ -730,7 +764,154 @@ function deleteDevice(id) {
     });
 }
 
-// ==================== 5. AI 助手 ====================
+// ==================== 5. 作物监测（MinIO + YOLO 实时分类）====================
+let sseConnection = null;
+const CROP_GREENHOUSES = [
+    { key: 'strawberry', name: '草莓大棚', icon: '🍓', cssClass: 'strawberry',  dbId: 1 },
+    { key: 'sunflower',  name: '向日葵大棚', icon: '🌻', cssClass: 'sunflower',  dbId: 2 },
+    { key: 'cotton',     name: '棉花大棚', icon: '🌿', cssClass: 'cotton',     dbId: 3 },
+];
+
+function renderCropMonitor(main) {
+    main.innerHTML = `
+        <div class="page-title">🌾 作物生长监测</div>
+        <div class="sse-status">
+            实时连接：<span class="sse-dot" id="sseDot"></span>
+            <span id="sseStatusText">连接中...</span>
+            <span style="margin-left:12px;color:#888;" id="sseUpdateTime"></span>
+            <button class="btn btn-sm" style="margin-left:auto" onclick="loadCropHistory()">🔄 刷新历史</button>
+        </div>
+        <div class="crop-grid" id="cropGrid"></div>`;
+
+    // 渲染三大棚卡片
+    renderCropCards();
+
+    // 连接 SSE
+    connectSSE();
+
+    // 加载历史记录
+    loadCropHistory();
+}
+
+function renderCropCards() {
+    const grid = document.getElementById('cropGrid');
+    if (!grid) return;
+    grid.innerHTML = CROP_GREENHOUSES.map(g => `
+        <div class="crop-card" id="cropCard_${g.key}">
+            <div class="crop-card-header ${g.cssClass}">
+                <span class="crop-icon">${g.icon}</span>
+                <span class="crop-name">${g.name}</span>
+            </div>
+            <div class="crop-card-body">
+                <div class="crop-result" id="cropResult_${g.key}">
+                    <div class="crop-empty">等待数据...</div>
+                </div>
+                <div class="crop-meta" id="cropMeta_${g.key}"></div>
+                <div class="crop-history">
+                    <table>
+                        <thead><tr><th>时间</th><th>生长阶段</th><th>置信度</th></tr></thead>
+                        <tbody id="cropHistory_${g.key}"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+function connectSSE() {
+    if (sseConnection) { sseConnection.close(); sseConnection = null; }
+
+    sseConnection = new EventSource('/api/classification/stream');
+
+    sseConnection.onopen = () => {
+        document.getElementById('sseDot').className = 'sse-dot connected';
+        document.getElementById('sseStatusText').textContent = '已连接';
+    };
+
+    sseConnection.addEventListener('classification', (e) => {
+        try {
+            const payload = JSON.parse(e.data);
+            const results = payload.data || [];
+            document.getElementById('sseUpdateTime').textContent =
+                '上次更新: ' + new Date().toLocaleTimeString();
+
+            // 按大棚 key 分组
+            const grouped = {};
+            results.forEach(r => {
+                if (!grouped[r.greenhouseKey]) grouped[r.greenhouseKey] = [];
+                grouped[r.greenhouseKey].push(r);
+            });
+
+            // 更新每个大棚的最新结果
+            for (const [key, items] of Object.entries(grouped)) {
+                updateCropCard(key, items[0]); // 只显示最新的
+            }
+
+            // 刷新历史表
+            loadCropHistory();
+
+        } catch (err) {
+            console.error('SSE 解析失败:', err);
+        }
+    });
+
+    sseConnection.onerror = () => {
+        document.getElementById('sseDot').className = 'sse-dot disconnected';
+        document.getElementById('sseStatusText').textContent = '连接断开，10秒后重连...';
+        sseConnection.close();
+        setTimeout(connectSSE, 10000);
+    };
+}
+
+function updateCropCard(key, data) {
+    const resultDiv = document.getElementById('cropResult_' + key);
+    const metaDiv = document.getElementById('cropMeta_' + key);
+    if (!resultDiv || !data) return;
+
+    const confClass = data.confidence >= 0.8 ? 'conf-high' : data.confidence >= 0.5 ? 'conf-mid' : 'conf-low';
+    const confPct = (data.confidence * 100).toFixed(1);
+
+    resultDiv.innerHTML = `
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">📷 ${data.fileName}</div>
+        <div class="stage">${data.classNameCn}</div>
+        <div class="confidence">置信度 ${confPct}%</div>
+        <div class="confidence-bar"><div class="confidence-bar-fill ${confClass}" style="width:${confPct}%"></div></div>`;
+
+    metaDiv.innerHTML = `推理耗时: ${data.elapsedMs}ms | ${new Date().toLocaleTimeString()}`;
+}
+
+function loadCropHistory() {
+    CROP_GREENHOUSES.forEach(g => {
+        API.get('/api/classification/recent/' + g.key + '?limit=8').then(res => {
+            if (res.code !== 200) return;
+            const tbody = document.getElementById('cropHistory_' + g.key);
+            if (!tbody) return;
+            const data = res.data || [];
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="3">暂无记录</td></tr>';
+            } else {
+                tbody.innerHTML = data.map(r => `
+                    <tr>
+                        <td>${formatTime(r.createTime)}</td>
+                        <td><b>${r.classNameCn}</b></td>
+                        <td>${(r.confidence*100).toFixed(1)}%</td>
+                    </tr>`).join('');
+            }
+        });
+    });
+}
+
+// 切换页面时断开 SSE
+const origLoadPage = loadPage;
+loadPage = function(page) {
+    if (snAutoRefreshTimer) { clearInterval(snAutoRefreshTimer); snAutoRefreshTimer = null; }
+    if (page !== 'crops' && sseConnection) {
+        sseConnection.close();
+        sseConnection = null;
+    }
+    origLoadPage(page);
+};
+
+// ==================== 6. AI 助手 ====================
 const QUICK_QUESTIONS = [
     '最近各大棚有什么异常吗？',
     '分析一下温度趋势',
