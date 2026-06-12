@@ -35,8 +35,18 @@ public class MinioService {
 
     @PostConstruct
     public void init() {
-        client = connect();
-        log.info("MinIO 客户端初始化完成");
+        try {
+            client = connect();
+            log.info("MinIO 客户端初始化完成");
+        } catch (Exception e) {
+            log.warn("MinIO 不可用，作物分类功能将停用: {}", e.getMessage());
+            client = null;
+        }
+    }
+
+    /** 判断 MinIO 是否可用 */
+    public boolean isAvailable() {
+        return client != null;
     }
 
     /**
@@ -56,6 +66,8 @@ public class MinioService {
                         .endpoint(protocol + ep)
                         .credentials(minioConfig.getAccessKey(), minioConfig.getSecretKey())
                         .build();
+                // 设置较短的超时时间，避免启动时等待过久
+                c.setTimeout(3000L, 3000L, 3000L);
                 // 验证连通性
                 c.listBuckets();
                 log.info("MinIO 连接成功: {}", ep);
@@ -77,6 +89,7 @@ public class MinioService {
      * @return 图片字节数组
      */
     public byte[] getImageBytes(String bucket, String objectName) {
+        if (!isAvailable()) throw new IllegalStateException("MinIO 不可用");
         try (InputStream stream = client.getObject(
                 GetObjectArgs.builder()
                         .bucket(bucket)
@@ -113,6 +126,7 @@ public class MinioService {
      * @return 对象名称列表
      */
     public List<String> listObjects(String bucket, String prefix, boolean recursive) {
+        if (!isAvailable()) throw new IllegalStateException("MinIO 不可用");
         List<String> names = new ArrayList<>();
         try {
             Iterable<Result<Item>> results = client.listObjects(

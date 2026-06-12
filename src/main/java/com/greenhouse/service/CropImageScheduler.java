@@ -60,6 +60,9 @@ public class CropImageScheduler {
 
     @Scheduled(initialDelayString = "5000", fixedRateString = "${greenhouse.classification.interval-seconds:30}000")
     public void run() {
+        if (!minioService.isAvailable()) {
+            return;  // MinIO 不可用，静默跳过本轮
+        }
         log.info("========== 定时分类任务开始 ==========");
         long roundStart = System.currentTimeMillis();
         List<ClassificationResult> allResults = new ArrayList<>();
