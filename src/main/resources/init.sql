@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS gh_device (
     device_name    VARCHAR(100) NOT NULL              COMMENT '设备名称',
     device_type    VARCHAR(50)  NOT NULL              COMMENT '设备类型：FAN/PUMP/LIGHT/CURTAIN',
     status         TINYINT      DEFAULT 0             COMMENT '状态：0-关闭，1-开启',
+    mode           VARCHAR(10)  DEFAULT 'AUTO'        COMMENT '控制模式：AUTO-自动，MANUAL-手动',
     create_time    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time    DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted        TINYINT      DEFAULT 0             COMMENT '逻辑删除',
@@ -101,10 +102,10 @@ INSERT INTO gh_greenhouse (name, location, area, description) VALUES
 
 -- 插入测试设备（先清空一号大棚旧数据，保证可重复执行）
 DELETE FROM gh_device WHERE greenhouse_id = 1;
-INSERT INTO gh_device (greenhouse_id, device_name, device_type, status) VALUES
-(1, '风机-1号', 'FAN', 0),
-(1, '补光灯-1号', 'LIGHT', 0),
-(1, '灌溉机-1号', 'IRRIGATION', 0);
+INSERT INTO gh_device (greenhouse_id, device_name, device_type, status, mode) VALUES
+(1, '风机-1号', 'FAN', 0, 'AUTO'),
+(1, '补光灯-1号', 'LIGHT', 0, 'AUTO'),
+(1, '灌溉机-1号', 'IRRIGATION', 0, 'AUTO');
 
 -- 插入测试传感器数据
 INSERT INTO gh_sensor_data (greenhouse_id, temperature, humidity, light_intensity, co2_concentration, soil_moisture, soil_ph, record_time) VALUES

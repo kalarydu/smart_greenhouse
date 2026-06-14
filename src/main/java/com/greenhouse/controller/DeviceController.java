@@ -106,6 +106,22 @@ public class DeviceController {
         return Result.ok(device.getStatus() == 1 ? "设备已开启，指令已下发" : "设备已关闭，指令已下发");
     }
 
+    /**
+     * 切换设备控制模式（自动 ↔ 手动）
+     * PUT /api/device/1/mode
+     */
+    @PutMapping("/{id}/mode")
+    public Result<?> toggleMode(@PathVariable Long id) {
+        Device device = deviceService.getById(id);
+        if (device == null) {
+            return Result.fail("设备不存在");
+        }
+        String newMode = "AUTO".equals(device.getMode()) ? "MANUAL" : "AUTO";
+        device.setMode(newMode);
+        deviceService.updateById(device);
+        return Result.ok("已切换为" + ("AUTO".equals(newMode) ? "自动控制" : "手动控制"));
+    }
+
     @DeleteMapping("/{id}")
     public Result<?> delete(@PathVariable Long id) {
         boolean removed = deviceService.removeById(id);

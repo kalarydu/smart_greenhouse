@@ -667,7 +667,7 @@ function renderDevice(main) {
                 <button class="btn btn-primary" onclick="loadDeviceList(1)">🔍 查询</button>
             </div>
             <table>
-                <thead><tr><th>ID</th><th>大棚ID</th><th>名称</th><th>类型</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                <thead><tr><th>ID</th><th>大棚ID</th><th>名称</th><th>类型</th><th>状态</th><th>模式</th><th>创建时间</th><th>操作</th></tr></thead>
                 <tbody id="devTableBody"></tbody>
             </table>
             <div class="pagination" id="devPagination"></div>
@@ -688,16 +688,18 @@ function loadDeviceList(page) {
         const typeMap = { FAN:'风机', LIGHT:'补光灯', IRRIGATION:'灌溉机' };
         const tbody = document.getElementById('devTableBody');
         if (!d.records || d.records.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无数据</td></tr>';
         } else {
             tbody.innerHTML = d.records.map(r => `
                 <tr>
                     <td>${r.id}</td><td>${r.greenhouseId}</td><td><b>${r.deviceName}</b></td>
                     <td>${typeMap[r.deviceType] || r.deviceType}</td>
                     <td><span class="tag ${r.status===1?'tag-on':'tag-off'}">${r.status===1?'开启':'关闭'}</span></td>
+                    <td><span class="tag ${r.mode==='MANUAL'?'tag-pending':'tag-done'}">${r.mode==='MANUAL'?'手动':'自动'}</span></td>
                     <td>${formatTime(r.createTime)}</td>
                     <td class="btn-group">
                         <button class="btn btn-warning btn-sm" onclick="toggleDevice(${r.id})">${r.status===1?'关闭':'开启'}</button>
+                        <button class="btn btn-sm" style="background:#722ed1;color:#fff" onclick="toggleDeviceMode(${r.id})">${r.mode==='MANUAL'?'切自动':'切手动'}</button>
                         <button class="btn btn-primary btn-sm" onclick="editDevice(${r.id})">编辑</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteDevice(${r.id})">删除</button>
                     </td>
@@ -749,6 +751,13 @@ function saveDevice() {
 
 function toggleDevice(id) {
     API.put(`/api/device/${id}/toggle`).then(res => {
+        if (res.code === 200) { toast(res.data); loadDeviceList(1); }
+        else toast(res.message, 'error');
+    });
+}
+
+function toggleDeviceMode(id) {
+    API.put(`/api/device/${id}/mode`).then(res => {
         if (res.code === 200) { toast(res.data); loadDeviceList(1); }
         else toast(res.message, 'error');
     });

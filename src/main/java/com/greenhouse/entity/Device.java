@@ -32,6 +32,9 @@ public class Device {
     /** 状态：0-关闭，1-开启 */
     private Integer status;
 
+    /** 控制模式：AUTO-自动（根据阈值），MANUAL-手动（仅前端控制） */
+    private String mode = "AUTO";
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

@@ -115,6 +115,12 @@ public class AutoControlService {
         int targetStatus = turnOn ? 1 : 0;
 
         for (Device device : devices) {
+            // 手动模式 → 跳过自动控制，由用户手动操作
+            if ("MANUAL".equals(device.getMode())) {
+                log.debug("设备 {} 处于手动模式，跳过自动控制", device.getDeviceName());
+                continue;
+            }
+
             // 已经是目标状态，跳过
             if (device.getStatus() != null && device.getStatus() == targetStatus) {
                 log.debug("设备 {} 已处于目标状态，跳过", device.getDeviceName());
