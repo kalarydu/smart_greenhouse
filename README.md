@@ -196,7 +196,7 @@ cd demo
 2. **应用接收** → `MqttMessageListener` 订阅 IoTDA 主题，解析传感器数据
 3. **入库存储** → 解析后的数据写入 `gh_sensor_data` 表
 4. **报警检测** → `AlertCheckService` 逐项检测阈值，超标自动生成报警记录
-5. **🆕 自动控制** → `AutoControlService` 检测温度/光照，自动开关风机/补光灯
+5. **🆕 自动控制** → `AutoControlService` 检测温度/光照/土壤湿度，自动开关风机/补光灯/灌溉机
 6. **指令下发** → 手动或自动触发 → `MqttSendUtil` 通过华为云 API 向设备下发控制指令
 7. **☁️ 图片分类** → 前端/定时任务触发 → `MinioService` 从 MinIO 拉取图片 → `ClassifierService` 调用 ONNX YOLO 模型推理 → 返回生长周期识别结果
 
@@ -836,6 +836,9 @@ greenhouse:
 |----------|------|----------|--------|
 | 温度 > `temperature-high` | 自动开启 | 同大棚 **风机 (FAN)** | 5 分钟 |
 | 光照 < `light-low` | 自动开启 | 同大棚 **补光灯 (LIGHT)** | 5 分钟 |
+| 土壤湿度 < `soil-moisture-low` | 自动开启 | 同大棚 **灌溉机 (IRRIGATION)** | 5 分钟 |
+
+> 💡 自动控制仅对 **AUTO 模式**设备生效。切换到 **MANUAL（手动）模式**的设备不会触发自动开关，仅响应前端手动操作。
 
 ### 保护机制
 
@@ -854,8 +857,9 @@ MQTT 传感器数据到达
   → sensorDataService.save()               入库
   → alertCheckService.checkAndCreateAlerts()  报警检测
   → autoControlService.checkAndControl()      🆕 自动控制
-       ├─ 温度 > 30℃ → 查同大棚 FAN → 关闭中 → 开启，MQTT 下发 {"motor":"ON"}
-       └─ 光照 < 10000 Lux → 查同大棚 LIGHT → 关闭中 → 开启，MQTT 下发 {"light":"ON"}
+       ├─ 温度 > 30℃  → 查同大棚 FAN → 关闭中 → 开启，MQTT 下发 {"motor":"ON"}
+       ├─ 光照 < 500 Lux → 查同大棚 LIGHT → 关闭中 → 开启，MQTT 下发 {"light":"ON"}
+       └─ 土壤湿度 < 30% → 查同大棚 IRRIGATION → 关闭中 → 开启，MQTT 下发 {"Irrigation":"ON"}
 ```
 
 ### 配置示例
@@ -866,8 +870,9 @@ greenhouse:
     enabled: true              # 是否启用自动控制（关闭后只报警不控制）
     cooldown-minutes: 5        # 冷却时间（分钟），避免频繁开关
     thresholds:
-      temperature-high: 30.0   # ℃，高于此值 → 自动开启风机
-      light-low: 10000.0       # Lux，低于此值 → 自动开启补光灯
+      temperature-high: 30.0     # ℃，高于此值 → 自动开启风机
+      light-low: 500.0           # Lux，低于此值 → 自动开启补光灯
+      soil-moisture-low: 30.0    # %，低于此值 → 自动开启灌溉机
 ```
 
 ### 核心类

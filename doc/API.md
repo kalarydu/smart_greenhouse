@@ -270,6 +270,7 @@
 | POST | `/api/device` | 新增设备 |
 | PUT | `/api/device` | 修改设备 |
 | PUT | `/api/device/{id}/toggle` | 🔌 开关设备（下发 MQTT 指令） |
+| PUT | `/api/device/{id}/mode` | 🔄 切换控制模式（自动 ↔ 手动） |
 | DELETE | `/api/device/{id}` | 删除设备 |
 
 ### GET /api/device/list — 分页查询
@@ -281,7 +282,7 @@
 | page | int | 否 | 页码，默认 1 |
 | size | int | 否 | 每页条数，默认 10 |
 | greenhouseId | long | 否 | 按大棚ID筛选 |
-| deviceType | string | 否 | 按设备类型筛选：FAN / PUMP / LIGHT / CURTAIN |
+| deviceType | string | 否 | 按设备类型筛选：FAN / LIGHT / IRRIGATION |
 
 ### POST /api/device — 新增设备
 
@@ -302,7 +303,7 @@
 |------|------|------|------|
 | greenhouseId | long | 是 | 所属大棚ID |
 | deviceName | string | 是 | 设备名称 |
-| deviceType | string | 是 | 设备类型：FAN-风机 / PUMP-水泵 / LIGHT-补光灯 / CURTAIN-卷帘 |
+| deviceType | string | 是 | 设备类型：FAN-风机 / LIGHT-补光灯 / IRRIGATION-灌溉机 |
 | status | int | 否 | 初始状态：0-关闭（默认），1-开启 |
 
 ### PUT /api/device/{id}/toggle — 🔌 开关设备
@@ -315,10 +316,17 @@
 |----------|------------|----------|
 | FAN（风机） | 电机控制 | `{"motor":"ON"/"OFF"}` |
 | LIGHT（补光灯） | 紫光灯控制 | `{"light":"ON"/"OFF"}` |
-| PUMP（水泵） | 水泵控制 | `{"pump":"ON"/"OFF"}` |
-| CURTAIN（卷帘） | 卷帘控制 | `{"curtain":"ON"/"OFF"}` |
+| IRRIGATION（灌溉机） | 灌溉机控制 | `{"Irrigation":"ON"/"OFF"}` |
 
 **响应示例：** `{ "code": 200, "message": "成功", "data": "设备已开启，指令已下发" }`
+
+### PUT /api/device/{id}/mode — 🔄 切换控制模式
+
+切换设备的控制模式：**AUTO**（自动，根据阈值自动开关）↔ **MANUAL**（手动，仅前端按钮控制）。
+
+**响应示例：** `{ "code": 200, "message": "成功", "data": "已切换为手动控制" }`
+
+> 新增设备默认模式为 AUTO。手动模式下 `AutoControlService` 会跳过该设备，不会自动开关。
 
 ---
 
