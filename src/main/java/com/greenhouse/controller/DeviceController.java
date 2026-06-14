@@ -67,10 +67,9 @@ public class DeviceController {
      * PUT /api/device/1/toggle
      *
      * 设备类型 → 命令映射：
-     *   FAN    → 电机控制   paras: {"motor": "ON"/"OFF"}
-     *   LIGHT  → 紫光灯控制 paras: {"light": "ON"/"OFF"}
-     *   PUMP   → 水泵控制   paras: {"pump": "ON"/"OFF"}
-     *   CURTAIN → 卷帘控制  paras: {"curtain": "ON"/"OFF"}
+     *   FAN        → 电机控制   paras: {"motor": "ON"/"OFF"}
+     *   LIGHT      → 紫光灯控制 paras: {"light": "ON"/"OFF"}
+     *   IRRIGATION → 灌溉控制   paras: {"Irrigation": "ON"/"OFF"}
      */
     @PutMapping("/{id}/toggle")
     public Result<?> toggle(@PathVariable Long id) {
@@ -94,13 +93,9 @@ public class DeviceController {
                 commandName = "紫光灯控制";
                 parasJson = "{\"light\":\"" + state + "\"}";
                 break;
-            case "PUMP":
-                commandName = "水泵控制";
-                parasJson = "{\"pump\":\"" + state + "\"}";
-                break;
-            case "CURTAIN":
-                commandName = "卷帘控制";
-                parasJson = "{\"curtain\":\"" + state + "\"}";
+            case "IRRIGATION":
+                commandName = "灌溉机控制";
+                parasJson = "{\"Irrigation\":\"" + state + "\"}";
                 break;
             default:
                 commandName = device.getDeviceType() + "控制";

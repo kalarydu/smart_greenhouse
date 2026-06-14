@@ -75,6 +75,19 @@ public class AutoControlService {
                                 data.getLightIntensity(), t.getLightLow()));
             }
         }
+
+        // 3. 土壤湿度过低 → 自动开启灌溉机；土壤湿度恢复正常 → 自动关闭灌溉机
+        if (data.getSoilMoisture() != null) {
+            if (data.getSoilMoisture() < t.getSoilMoistureLow()) {
+                controlDeviceByType(greenhouseId, "IRRIGATION", true,
+                        String.format("土壤湿度过低自动触发：当前 %.1f %%，阈值 < %.1f %%",
+                                data.getSoilMoisture(), t.getSoilMoistureLow()));
+            } else if (data.getSoilMoisture() >= t.getSoilMoistureLow()) {
+                controlDeviceByType(greenhouseId, "IRRIGATION", false,
+                        String.format("土壤湿度恢复正常：当前 %.1f %%，阈值 ≥ %.1f %%",
+                                data.getSoilMoisture(), t.getSoilMoistureLow()));
+            }
+        }
     }
 
     /**
@@ -134,6 +147,10 @@ public class AutoControlService {
                 case "LIGHT":
                     commandName = "紫光灯控制";
                     parasJson = "{\"light\":\"" + state + "\"}";
+                    break;
+                case "IRRIGATION":
+                    commandName = "灌溉机控制";
+                    parasJson = "{\"Irrigation\":\"" + state + "\"}";
                     break;
                 default:
                     commandName = deviceType + "控制";

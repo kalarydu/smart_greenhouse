@@ -29,5 +29,8 @@ public class AutoControlConfig {
 
         /** 光照强度下限（Lux），低于此值 → 自动开启补光灯 */
         private double lightLow = 10000.0;
+
+        /** 土壤湿度下限（%），低于此值 → 自动开启灌溉机 */
+        private double soilMoistureLow = 30.0;
     }
 }

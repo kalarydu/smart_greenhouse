@@ -638,9 +638,8 @@ function renderDevice(main) {
                 <label>设备类型
                     <select id="devType">
                         <option value="FAN">风机</option>
-                        <option value="PUMP">水泵</option>
                         <option value="LIGHT">补光灯</option>
-                        <option value="CURTAIN">卷帘</option>
+                        <option value="IRRIGATION">灌溉机</option>
                     </select>
                 </label>
                 <label>状态
@@ -661,9 +660,8 @@ function renderDevice(main) {
                     <select id="devSearchType">
                         <option value="">全部</option>
                         <option value="FAN">风机</option>
-                        <option value="PUMP">水泵</option>
                         <option value="LIGHT">补光灯</option>
-                        <option value="CURTAIN">卷帘</option>
+                        <option value="IRRIGATION">灌溉机</option>
                     </select>
                 </label>
                 <button class="btn btn-primary" onclick="loadDeviceList(1)">🔍 查询</button>
@@ -687,7 +685,7 @@ function loadDeviceList(page) {
     API.get(url).then(res => {
         if (res.code !== 200) { toast(res.message, 'error'); return; }
         const d = res.data;
-        const typeMap = { FAN:'风机', PUMP:'水泵', LIGHT:'补光灯', CURTAIN:'卷帘' };
+        const typeMap = { FAN:'风机', LIGHT:'补光灯', IRRIGATION:'灌溉机' };
         const tbody = document.getElementById('devTableBody');
         if (!d.records || d.records.length === 0) {
             tbody.innerHTML = '<tr class="empty-row"><td colspan="7">暂无数据</td></tr>';

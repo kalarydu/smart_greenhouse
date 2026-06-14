@@ -99,10 +99,12 @@ INSERT INTO gh_greenhouse (name, location, area, description) VALUES
 ('二号大棚', 'A区-西侧', 180.0, '黄瓜种植大棚'),
 ('三号大棚', 'B区-南侧', 250.0, '辣椒种植大棚');
 
--- 插入测试设备
+-- 插入测试设备（先清空一号大棚旧数据，保证可重复执行）
+DELETE FROM gh_device WHERE greenhouse_id = 1;
 INSERT INTO gh_device (greenhouse_id, device_name, device_type, status) VALUES
 (1, '风机-1号', 'FAN', 0),
-(1, '补光灯-1号', 'LIGHT', 0);
+(1, '补光灯-1号', 'LIGHT', 0),
+(1, '灌溉机-1号', 'IRRIGATION', 0);
 
 -- 插入测试传感器数据
 INSERT INTO gh_sensor_data (greenhouse_id, temperature, humidity, light_intensity, co2_concentration, soil_moisture, soil_ph, record_time) VALUES

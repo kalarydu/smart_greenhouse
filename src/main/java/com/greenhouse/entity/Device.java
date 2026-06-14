@@ -23,10 +23,9 @@ public class Device {
 
     /**
      * 设备类型：
-     * FAN - 风机
-     * PUMP - 水泵
-     * LIGHT - 补光灯
-     * CURTAIN - 卷帘
+     * FAN        - 风机
+     * LIGHT      - 补光灯
+     * IRRIGATION - 灌溉机
      */
     private String deviceType;
 
