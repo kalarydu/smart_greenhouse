@@ -102,11 +102,7 @@ greenhouse:
 # ========== MinIO 对象存储配置 ==========
 minio:
   endpoints:
-    - 127.0.0.1:9000
-    - 169.254.105.187:9000
-    - 10.190.83.10:9000
-    - 192.168.206.1:9000
-    - 192.168.44.1:9000
+    - 10.190.82.238:9000
   access-key: minioadmin
   secret-key: minioadmin
   secure: false
